@@ -7,6 +7,7 @@ import { logger } from './config/logger.config';
 import { attachCorrelationMiddleware } from './middleware/correlation.middleware';
 
 
+
 const app = express();
 app.use(express.json()); // Middleware to parse JSON request bodies used for serialization and deserialization of data in the request body
 app.use(express.text());
