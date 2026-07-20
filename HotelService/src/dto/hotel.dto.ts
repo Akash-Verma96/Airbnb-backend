@@ -5,3 +5,8 @@ export type createHotelDTO = {
     rating?: number;
     ratingCount?: number;
 }
+
+export type updateHotelNameDTO = {
+    id: number
+    name: string
+}
