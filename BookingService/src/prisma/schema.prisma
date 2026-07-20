@@ -1,0 +1,30 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+
+model Booking {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  hotelId         Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  bookingAmount   Int
+  status          BookingStatus
+  totalGuests     Int
+}
+
+enum BookingStatus {
+  PENDING
+  COMFIRMED
+  CANCELLED
+}
