@@ -1,10 +1,10 @@
-import { Prisma } from "@prisma/client";
-import prismaClient from "../prisma/client";
+import { Prisma } from "../generated/prisma/client";
+import { prisma } from "../lib/prisma"
 
-export async function creatBooking(BookingInput: Prisma.BookingCreateInput){
-    const booking = await prismaClient.booking.create({
-        data: BookingInput
-    });
+export async function createBooking(bookingInput: Prisma.BookingCreateInput){
+    const booking = await prisma.booking.create({
+        data: bookingInput,
+    })
 
     return booking;
 }

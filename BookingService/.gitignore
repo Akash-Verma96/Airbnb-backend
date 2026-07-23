@@ -2,3 +2,9 @@ node_modules/
 dist/
 .env
 logs/
+/generated/prisma
+/generated/
+
+/src/generated/prisma
+
+/src/generated/prisma
