@@ -9,3 +9,4 @@ export const querySchema = z.object({
     search: z.string().min(3),
     company: z.string().min(3)
 })
+

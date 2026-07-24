@@ -1,22 +1,26 @@
-import { NextFunction, Request, Response } from 'express';
-import { InternalServerError} from '../utils/errors/app.error';
-import { createBookingService } from '../services/booking.service';
+import { Request, Response } from 'express';
+import { confirmBookingService, createBookingService } from '../services/booking.service';
 import { StatusCodes } from 'http-status-codes';
-// import { createBookingService } from '../services/booking.service';
-// import { prisma } from "../lib/prisma";
 
 
+interface userParams {
+    idempotencyKey: string;
+}
 
-export const bookingHandler = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const booking = await createBookingService(req.body);
+export const createBookingHandler = async (req: Request, res: Response) => {
+    const booking = await createBookingService(req.body);
 
-        return res.status(StatusCodes.OK).json({
-            "message" : "Booking created Successfully!",
-            "data" : booking
-        })
-    } catch (error) {
-        console.log(error);
-        throw new InternalServerError("Internal Server ERROR");
-    }
+    return res.status(StatusCodes.OK).json({
+        bookingId: booking.bookingId,
+        IdempotencyKey: booking.idempotencyKey
+    })
+}
+
+export const confirmBookingHandler = async (req: Request<userParams>, res: Response) => {
+    const booking = await confirmBookingService(req.params.idempotencyKey);
+
+    res.status(200).json({
+        bookingId: booking.id,
+        status: booking.status,
+    });
 }

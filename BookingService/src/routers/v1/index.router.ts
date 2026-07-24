@@ -1,6 +1,6 @@
 import express from 'express';
-import pingRouter from './ping.router';
 import bookingRouter from './booking.router';
+import pingRouter from './ping.router';
 
 const v1Router = express.Router();
 
