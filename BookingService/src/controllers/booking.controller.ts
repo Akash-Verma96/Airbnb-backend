@@ -19,7 +19,7 @@ export const createBookingHandler = async (req: Request, res: Response) => {
 export const confirmBookingHandler = async (req: Request<userParams>, res: Response) => {
     const booking = await confirmBookingService(req.params.idempotencyKey);
 
-    res.status(200).json({
+    res.status(StatusCodes.OK).json({
         bookingId: booking.id,
         status: booking.status,
     });
