@@ -10,6 +10,7 @@ import { addEmailToQueue } from './producers/email.producer';
 
 
 
+
 const app = express();
 app.use(express.json()); // Middleware to parse JSON request bodies used for serialization and deserialization of data in the request body
 app.use(express.text());
@@ -29,13 +30,13 @@ app.listen(serverConfig.PORT, () => {
 
     const notificationDto = {
         to: "akashsoftskill@gmail.com",
-        subject: "Email From Notification Service via nodemailer!",
-        templateId: "sample-template",
+        subject: "sample-subject",
+        templateId: "welcome",
         params: {
             name: "Akash",
-            orderId: 1232
-            }
+            appName: "Booking App"
         }
-    
+    }
+
     addEmailToQueue(notificationDto);
 })

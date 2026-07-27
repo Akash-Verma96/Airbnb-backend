@@ -3,35 +3,9 @@ import { NotificationDto } from "../dto/notification.dto";
 import { MAILER_QUEUE } from "../queues/mailer.queue";
 import { getRedisConnObject } from "../config/redis.config";
 import { MAILER_PAYLOAD } from "../producers/email.producer";
-import nodemailer from 'nodemailer'
-
-function sendMail(payload: NotificationDto){
-    const transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true, // use SSL
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASSWORD,
-        }
-    })
-
-    const mailOptions = {
-        from: 'akt64725@gmail.com',
-        to: payload.to,
-        subject: payload.subject,
-        text: payload.params.name
-    };
-
-    // Send the email
-    transporter.sendMail(mailOptions, function(error, info){
-    if (error) {
-        console.log('Error:', error);
-    } else {
-        console.log('Email sent:', info.response);
-    }
-    });
-}
+import { sendEmail } from "../services/mailer.service";
+import { renderMailTemplate } from "../handlebars/template.handlebar";
+import { logger } from "../config/logger.config";
 
 
 export function setupMailerWorker(){
@@ -51,9 +25,12 @@ export function setupMailerWorker(){
 
             // call the service layer from here
 
-            sendMail(payload);
+            const emailContent = await renderMailTemplate(payload.templateId, payload.params);
 
 
+            await sendEmail(payload.to, payload.subject, emailContent);
+
+            logger.info(`Email sent to ${payload.to} with subject "${payload.subject}"`);
         },
         {
             connection: getRedisConnObject()
