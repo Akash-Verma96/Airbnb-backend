@@ -16,9 +16,9 @@ module.exports = {
 
         created_at DATETIME,
         updated_at DATETIME,
-        deleted_at DATETIME
+        deleted_at DATETIME DEFAULT NULL
       )
-    `)
+    `);
   },
 
   async down (queryInterface: QueryInterface) {

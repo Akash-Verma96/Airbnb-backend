@@ -5,7 +5,7 @@ import sequelize from "./sequelize";
 class Room extends Model<InferAttributes<Room>, InferCreationAttributes<Room>>{
     declare id: CreationOptional<number>;
     declare hotel_id: number;
-    declare doa: Date;
+    declare dateOfAvailabilty: Date;
     declare createdAt: CreationOptional<Date>;
     declare updatedAt: CreationOptional<Date>;
     declare booking_id?: number;
@@ -31,7 +31,7 @@ Room.init(
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
        },
-       doa: {
+       dateOfAvailabilty: {
         type: DataTypes.DATE,
         allowNull: false
        },

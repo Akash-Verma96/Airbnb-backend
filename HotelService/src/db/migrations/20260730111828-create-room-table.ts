@@ -16,7 +16,7 @@ module.exports = {
 
         created_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL,
-        deleted_at DATETIME NOT NULL
+        deleted_at DATETIME DEFAULT NULL
       )
     `);
   },

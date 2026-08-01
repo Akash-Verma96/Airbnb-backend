@@ -1,7 +1,7 @@
 import { logger } from "../config/logger.config";
 import Hotel from "../db/models/hotel";
 import { NotFoundError } from "../utils/errors/app.error";
-import BaseRepository from "./base.repositories";
+import BaseRepository from "./base.repositry";
 
 // export async function createHotel(hotelData: createHotelDTO) {
 //     const hotel = await Hotel.create(hotelData);

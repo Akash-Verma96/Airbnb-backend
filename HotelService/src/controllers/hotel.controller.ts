@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express"
-import { createHotelService, softDeleteService, getAllHotelService, getHotelByIdService, updateHotelNameByIdService } from "../services/hotel.service"
+import { createHotelService, softDeleteService, getAllHotelService, getHotelByIdService, updateHotelByIdService } from "../services/hotel.service"
 import { StatusCodes } from "http-status-codes";
 
 
@@ -50,7 +50,7 @@ export async function softDeleteHandler(req: Request,res: Response, next: NextFu
 }
 
 export async function updateHotelNameByIdHandler(req: Request, res: Response, next: NextFunction){
-    const updateHotel = await updateHotelNameByIdService(req.body);
+    const updateHotel = await updateHotelByIdService(req.body);
 
     res.status(StatusCodes.ACCEPTED).json({
         message: "Hotel Updated Successfully",

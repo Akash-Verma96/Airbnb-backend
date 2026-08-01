@@ -27,7 +27,7 @@ export async function softDeleteService(id : number){
     return deletedHotel;
 }
 
-export async function updateHotelNameByIdService(updateData: updateHotelNameDTO){
+export async function updateHotelByIdService(updateData: updateHotelNameDTO){
     const updatedhotel = await hotelRepository.update(updateData.id,updateData);
 
     return updatedhotel;

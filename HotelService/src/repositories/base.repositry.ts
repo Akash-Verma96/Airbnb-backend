@@ -1,6 +1,6 @@
 import { CreationAttributes, Model, ModelStatic, WhereOptions } from "sequelize";
 
-class BaseRepository<T extends Model>{
+abstract class BaseRepository<T extends Model>{
     protected model: ModelStatic<T>;
 
     constructor(model: ModelStatic<T>){

@@ -1,7 +1,7 @@
 import { CreationOptional, DataTypes, InferAttributes, InferCreationAttributes, Model } from "sequelize";
 import sequelize from "./sequelize";
 
-enum RoomType {
+export enum RoomType {
   SINGLE = 'SINGLE',
   DOUBLE = 'DOUBLE',
   FAMILY = 'FAMILY',
@@ -14,9 +14,10 @@ class RoomCategory extends Model<InferAttributes<RoomCategory>, InferCreationAtt
     declare hotel_id: number;
     declare roomType: RoomType;
     declare roomNo: number;
+    declare price: number;
     declare createdAt: CreationOptional<Date>;
     declare updatedAt: CreationOptional<Date>;
-    declare deletedAt: CreationOptional<Date>;
+    declare deletedAt: CreationOptional<Date> | null;
 }
 
 RoomCategory.init({
@@ -29,18 +30,16 @@ RoomCategory.init({
     hotel_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        references: {
-            model: 'hotels',
-            key: 'id'
-        },
-        onUpdate: 'CASCADE',
-        onDelete: 'CASCADE'
     },
     roomType: {
       type: 'ENUM',
       values: [...Object.values(RoomType)],
     },
     roomNo: {
+        type: DataTypes.INTEGER,
+        allowNull: false
+    },
+    price: {
         type: DataTypes.INTEGER,
         allowNull: false
     },
@@ -51,7 +50,8 @@ RoomCategory.init({
         type: DataTypes.DATE,
     },
     deletedAt: {
-        type: DataTypes.DATE
+        type: DataTypes.DATE,
+        defaultValue: null,
     }
 },{
     tableName: 'room_categories',
