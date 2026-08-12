@@ -2,9 +2,9 @@ package controllers
 
 import (
 	"AuthInGo/services"
-	"encoding/json"
-	"fmt"
+	utils "AuthInGo/utils"
 	"net/http"
+	dto "AuthInGo/dto"
 )
 
 type UserController struct {
@@ -19,44 +19,97 @@ func NewUserController(_userService services.UserService) *UserController{
 
 
 func (uc *UserController) CreateUser(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Creating the User!")
-	uc.UserService.Create()
-	w.Write([]byte("User Create endpoint Done"))
-}
+	
+	var payload dto.CreateUserDTO
 
-func (uc *UserController) GetUser(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Fetchiing the User!")
-	uc.UserService.GetByIdUser()
-	w.Write([]byte("User Fetch endpoint Done"))
-}
-
-func (uc *UserController) GetAllUser(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Fetching all Users..")
-	users := uc.UserService.GetAll()
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	// 3. Encode the slice directly into the response writer -> json.NewEncoder(w).Encode(users)
-	if err := json.NewEncoder(w).Encode(users); err != nil {
-		http.Error(w, "Failed to encode JSON", http.StatusInternalServerError)
+	if jsonErr := utils.ReadJsonBody(r, &payload); jsonErr != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusBadRequest,"Bad Input", jsonErr)
 		return
 	}
+
+	uc.UserService.Create(payload.Username,payload.Email,payload.Password)
+
+
+	utils.WriteJsonSuccessResponse(w,http.StatusOK, "User Created Successfully", "User Created!")
 }
 
-type UserRequest struct {
-	id int64
+
+
+
+
+func (uc *UserController) LoginUser(w http.ResponseWriter, r *http.Request) {
+	var payload dto.LoginUserDTO
+
+	if jsonErr := utils.ReadJsonBody(r, &payload); jsonErr != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusBadRequest,"Bad Input", jsonErr)
+		return
+	}
+
+
+	if validationErr := utils.Validator.Struct(payload); validationErr != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusInternalServerError, "Invalid Input data", validationErr)
+		return
+	}
+	
+
+	jwtToken, err := uc.UserService.LoginUser(&payload)
+
+	if err != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusInternalServerError, "Failed to Login!", err)
+		return
+	}
+
+	utils.WriteJsonSuccessResponse(w,http.StatusOK, "User Logged In succesfully!", jwtToken)
 }
+
+
+
+
+func (uc *UserController) GetUser(w http.ResponseWriter, r *http.Request) {
+
+	var payload struct {
+		Id int64 `json:"id"`
+	}
+
+	if jsonErr := utils.ReadJsonBody(r, &payload); jsonErr != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusBadRequest,"Bad Input", jsonErr)
+		return
+	}
+	
+	user, err := uc.UserService.GetUserById(payload.Id)
+
+	if err != nil {
+		utils.WriteJsonErrorResponse(w, http.StatusInternalServerError, "Error while fetching the user!", err)
+	}
+
+	utils.WriteJsonSuccessResponse(w, http.StatusOK,"User Fetched Successful", user)
+}
+
+
+func (uc *UserController) GetAllUser(w http.ResponseWriter, r *http.Request) {
+
+
+	users := uc.UserService.GetAll()
+
+
+	utils.WriteJsonSuccessResponse(w,http.StatusOK,"All Profile Fetched Successfully!", users)
+}
+
+
 
 func (us *UserController) DeleteUserById(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Deleting user...")
-	var reqBody UserRequest
-    if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
-    defer r.Body.Close()
+	
+	var payload struct {
+		Id int64 `json:"id"`
+	}
 
-	us.UserService.DeleteById(reqBody.id)
-	w.Write([]byte("User Deleted Successfully"))
+	if jsonErr := utils.ReadJsonBody(r, &payload); jsonErr != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusBadRequest,"Bad Input", jsonErr)
+		return
+	}
+
+	us.UserService.DeleteById(payload.Id)
+
+
+	utils.WriteJsonSuccessResponse(w,http.StatusOK, "User Deleted Successfully!", "nil")
 }

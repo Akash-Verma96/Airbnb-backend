@@ -2,13 +2,16 @@ package services
 
 import (
 	db "AuthInGo/db/repositories"
+	"AuthInGo/dto"
 	"AuthInGo/models"
+	"AuthInGo/utils"
 	"fmt"
 )
 
 type UserService interface {
-	GetByIdUser() error
-	Create() error
+	Create(name string, email string, password string) error
+	LoginUser(payload *dto.LoginUserDTO) (string, error)
+	GetUserById(id int64) (*models.User, error)
 	GetAll() ([]*models.User)
 	DeleteById(id int64) error
 }
@@ -23,16 +26,32 @@ func NewUserService(_userRepository db.UserRepository) UserService {
 	}
 }
 
-func (us * UserServiceImpl) Create() error{
+func (us * UserServiceImpl) Create(name string, email string, password string) error{
 	fmt.Println("Creating the User reached at Service!")
-	us.UserRepository.Create()
+
+	//hashing the password
+	hashedPassword, err := utils.HashPassword(password)
+
+	if err != nil {
+		fmt.Println("Error hashing password", err)
+		return nil
+	}
+
+	us.UserRepository.Create(name,email,hashedPassword)
 	return nil
 }
 
-func (us * UserServiceImpl) GetByIdUser() error{
+func (us *UserServiceImpl) LoginUser(payload *dto.LoginUserDTO) (string,error) {
+	fmt.Println("Loging the user reached at service")
+	user, err := us.UserRepository.LoginUser(payload.Email,payload.Password)
+
+	return user, err
+}
+
+func (us * UserServiceImpl) GetUserById(id int64) (*models.User, error) {
 	fmt.Println("Fetching the User reached at Service!")
-	us.UserRepository.GetById()
-	return nil
+	users, err := us.UserRepository.GetById(id)
+	return users, err
 }
 
 func (us *UserServiceImpl) GetAll() ([]*models.User){
