@@ -170,19 +170,17 @@ func (ur *UserRepositoryImpl) GetAll() ([]*models.User,error){
 
 	
 
-	// scanErr := result.Scan(&user.Id,&user.Username,&user.Email,&user.Password,&user.CreatedAt,&user.UpdatedAt)
-
 	var users []*models.User
 
-	// 5. Loop through the result set row by row
+	// Loop through the result set row by row
 	for rows.Next() {
 		var user = &models.User{}
-		// 6. Scan the database columns into the fields of the struct
+		//  Scan the database columns into the fields of the struct
 		err := rows.Scan(&user.Id,&user.Username,&user.Email,&user.Password,&user.CreatedAt,&user.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
-		// 7. Append each user to your slice
+		// Append each user to your slice
 		users = append(users, user)
 	}
 

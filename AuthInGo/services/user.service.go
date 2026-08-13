@@ -9,7 +9,7 @@ import (
 )
 
 type UserService interface {
-	Create(name string, email string, password string) error
+	Create(payload *dto.CreateUserDTO) error
 	LoginUser(payload *dto.LoginUserDTO) (string, error)
 	GetUserById(id int64) (*models.User, error)
 	GetAll() ([]*models.User)
@@ -26,18 +26,18 @@ func NewUserService(_userRepository db.UserRepository) UserService {
 	}
 }
 
-func (us * UserServiceImpl) Create(name string, email string, password string) error{
+func (us * UserServiceImpl) Create(payload *dto.CreateUserDTO) error{
 	fmt.Println("Creating the User reached at Service!")
 
 	//hashing the password
-	hashedPassword, err := utils.HashPassword(password)
+	hashedPassword, err := utils.HashPassword(payload.Password)
 
 	if err != nil {
 		fmt.Println("Error hashing password", err)
 		return nil
 	}
 
-	us.UserRepository.Create(name,email,hashedPassword)
+	us.UserRepository.Create(payload.Username,payload.Email,hashedPassword)
 	return nil
 }
 

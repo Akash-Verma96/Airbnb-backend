@@ -1,10 +1,10 @@
 package controllers
 
 import (
+	dto "AuthInGo/dto"
 	"AuthInGo/services"
 	utils "AuthInGo/utils"
 	"net/http"
-	dto "AuthInGo/dto"
 )
 
 type UserController struct {
@@ -20,14 +20,9 @@ func NewUserController(_userService services.UserService) *UserController{
 
 func (uc *UserController) CreateUser(w http.ResponseWriter, r *http.Request) {
 	
-	var payload dto.CreateUserDTO
+	payload := r.Context().Value("payload-key").(dto.CreateUserDTO)
 
-	if jsonErr := utils.ReadJsonBody(r, &payload); jsonErr != nil {
-		utils.WriteJsonErrorResponse(w,http.StatusBadRequest,"Bad Input", jsonErr)
-		return
-	}
-
-	uc.UserService.Create(payload.Username,payload.Email,payload.Password)
+	uc.UserService.Create(&payload)
 
 
 	utils.WriteJsonSuccessResponse(w,http.StatusOK, "User Created Successfully", "User Created!")
@@ -38,19 +33,9 @@ func (uc *UserController) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 
 func (uc *UserController) LoginUser(w http.ResponseWriter, r *http.Request) {
-	var payload dto.LoginUserDTO
-
-	if jsonErr := utils.ReadJsonBody(r, &payload); jsonErr != nil {
-		utils.WriteJsonErrorResponse(w,http.StatusBadRequest,"Bad Input", jsonErr)
-		return
-	}
-
-
-	if validationErr := utils.Validator.Struct(payload); validationErr != nil {
-		utils.WriteJsonErrorResponse(w,http.StatusInternalServerError, "Invalid Input data", validationErr)
-		return
-	}
 	
+	
+	payload := r.Context().Value("payload-key").(dto.LoginUserDTO)
 
 	jwtToken, err := uc.UserService.LoginUser(&payload)
 
@@ -80,6 +65,7 @@ func (uc *UserController) GetUser(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		utils.WriteJsonErrorResponse(w, http.StatusInternalServerError, "Error while fetching the user!", err)
+		return
 	}
 
 	utils.WriteJsonSuccessResponse(w, http.StatusOK,"User Fetched Successful", user)

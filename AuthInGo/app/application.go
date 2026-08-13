@@ -58,7 +58,7 @@ func (app *Application) Run() error {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	fmt.Printf("Starting Server in Go on %s", app.Config.Addr)
+	fmt.Println("Starting Server in Go on port", app.Config.Addr)
 
 	return server.ListenAndServe()
 }
