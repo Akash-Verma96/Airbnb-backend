@@ -7,10 +7,10 @@ import (
 )
 
 type RoleRepository interface{
+	CreateRole(name string, description string) (*models.Role, error)
 	GetRoleById(id int64) (*models.Role, error)
 	GetRoleByName(name string) (*models.Role, error)
 	GetAllRoles() ([]*models.Role, error)
-	CreateRole(name string, description string) (*models.Role, error)
 	DeleteRoleById(id int64) error
 	UpdateRole(id int64, name string, description string) (*models.Role, error)
 }

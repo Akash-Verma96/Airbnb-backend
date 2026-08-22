@@ -1,9 +1,5 @@
 package models
 
-import (
-
-)
-
 type User struct {
 	Id        int64
 	Username  string
