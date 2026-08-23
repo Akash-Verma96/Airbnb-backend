@@ -21,9 +21,8 @@ func NewUserRouter(_userController *controllers.UserController) Router{
 func (ur *UserRouter) Register(r chi.Router){
 	r.With(middlewares.CreateRequestValidator).Post("/signup", ur.UserController.CreateUser)
 	r.With(middlewares.LoginRequestValidator, middlewares.RateLimiterMiddleware).Post("/login", ur.UserController.LoginUser)
-	
+	r.With(middlewares.JWTAuthMiddleware).Get("/profile", ur.UserController.GetUser)
 
-	r.Get("/profile", ur.UserController.GetUser)
-	r.Get("/all", ur.UserController.GetAllUser)
-	r.Delete("/", ur.UserController.DeleteUserById)
+	r.With(middlewares.JWTAuthMiddleware).Get("/all", ur.UserController.GetAllUser)
+	r.With(middlewares.JWTAuthMiddleware).Delete("/", ur.UserController.DeleteUserById)
 }

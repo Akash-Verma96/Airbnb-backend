@@ -12,7 +12,7 @@ type Router interface {
 }
 
 
-func SetUpRouter(UserRouter Router, UserRoleRouter Router, RoleRouter Router) *chi.Mux {
+func SetUpRouter(UserRouter Router, RoleRouter Router) *chi.Mux {
 	chiRouter := chi.NewRouter()
 
 	chiRouter.Use(middleware.Logger)
@@ -24,7 +24,6 @@ func SetUpRouter(UserRouter Router, UserRoleRouter Router, RoleRouter Router) *c
 
 	UserRouter.Register(chiRouter)
 	RoleRouter.Register(chiRouter)
-	UserRoleRouter.Register(chiRouter)
 
 	return chiRouter
 }

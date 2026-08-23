@@ -72,7 +72,7 @@ func (ur *UserRepositoryImpl) LoginUser(email string, password string) (string, 
 
 	if err != nil {
 		fmt.Println("User not found",err)
-		return "", nil
+		return "", err
 	}
 
 	if user == nil {

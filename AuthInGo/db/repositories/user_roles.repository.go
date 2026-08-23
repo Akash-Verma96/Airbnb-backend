@@ -13,6 +13,7 @@ type UserRoleRepository interface {
 	GetUserPermissions(userId int64) ([]*models.Permission, error) // to check the permissions of a user can be done by joining Role_Pemission table
 	HasPermission(userId int64, permissionName string) (bool, error) //to check weather the user has permission to do set of task or not
 	HasRole(userId int64, roleName string) (bool, error) // hasRole()
+	HasRoles(userId int64, roleNames []string) (bool, error)
 }
 
 type UserRoleRepositoryImpl struct{
@@ -161,4 +162,30 @@ func (ur *UserRoleRepositoryImpl) HasRole(userId int64, roleName string) (bool, 
 		return false, err
 	}	
 	return exists, nil
+}
+
+
+func (ur *UserRoleRepositoryImpl) HasRoles(userId int64, roleNames []string) (bool, error) {
+	if len(roleNames) == 0 {
+		return true, nil // If no roles are specified, return true
+	}
+
+	query := `
+		SELECT COUNT(*) = ?
+		FROM user_roles ur
+		INNER JOIN roles r ON ur.role_id = r.id
+		WHERE ur.user_id = ? AND r.name IN (?)
+		GROUP BY ur.user_id`
+
+	row := ur.db.QueryRow(query, len(roleNames), userId, roleNames)
+
+	var hasAllRoles bool
+	if err := row.Scan(&hasAllRoles); err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil // No roles found for the user
+		}
+		return false, err // Return any other error
+	}
+
+	return hasAllRoles, nil
 }

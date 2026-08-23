@@ -39,7 +39,7 @@ func (uc *UserController) LoginUser(w http.ResponseWriter, r *http.Request) {
 
 	jwtToken, err := uc.UserService.LoginUser(&payload)
 
-	if err != nil {
+	if err != nil || jwtToken == "" {
 		utils.WriteJsonErrorResponse(w,http.StatusInternalServerError, "Failed to Login!", err)
 		return
 	}
@@ -52,16 +52,15 @@ func (uc *UserController) LoginUser(w http.ResponseWriter, r *http.Request) {
 
 func (uc *UserController) GetUser(w http.ResponseWriter, r *http.Request) {
 
-	var payload struct {
-		Id int64 `json:"id"`
-	}
+	userId := r.Context().Value("userId").(int64)
 
-	if jsonErr := utils.ReadJsonBody(r, &payload); jsonErr != nil {
-		utils.WriteJsonErrorResponse(w,http.StatusBadRequest,"Bad Input", jsonErr)
+	if userId == 0 {
+		utils.WriteJsonErrorResponse(w, http.StatusBadRequest, "User ID is missing in the request context", nil)
 		return
 	}
+
 	
-	user, err := uc.UserService.GetUserById(payload.Id)
+	user, err := uc.UserService.GetUserById(userId)
 
 	if err != nil {
 		utils.WriteJsonErrorResponse(w, http.StatusInternalServerError, "Error while fetching the user!", err)
