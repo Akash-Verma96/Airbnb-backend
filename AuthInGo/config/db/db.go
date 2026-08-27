@@ -18,7 +18,6 @@ func SetUpDB() (*sql.DB , error) {
 	cfg.Addr = env.GetString("DB_ADDR", "127.0.0.1:3306")
 	cfg.DBName = env.GetString("Airbnb_auth", "Airbnb_auth")
 
-	fmt.Println("Format DSN of sql : ",cfg.FormatDSN())
 
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 

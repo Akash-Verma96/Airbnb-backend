@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"AuthInGo/dto"
 	"AuthInGo/services"
 	"AuthInGo/utils"
 	"fmt"
@@ -55,4 +56,119 @@ func (rc *RoleController) GetAllRoles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.WriteJsonSuccessResponse(w,http.StatusOK, "All Roles Found", roles)
+}
+
+
+func (rc *RoleController) GetRoleByName(w http.ResponseWriter, r *http.Request) {
+
+	var payload struct {
+		Name string `json:"name"`
+	}
+
+	if jsonErr := utils.ReadJsonBody(r, &payload); jsonErr != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusBadRequest,"Bad Input", jsonErr)
+		return
+	}
+
+	role, err := rc.roleService.GetRoleByName(payload.Name)
+
+	if err != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusInternalServerError,"Error while Fetching Role", err)
+		return
+	}
+
+	utils.WriteJsonSuccessResponse(w, http.StatusOK, "Role Fetched Successfully!", role)
+}
+
+func (rc *RoleController) CreateRole(w http.ResponseWriter, r *http.Request){
+	payload := r.Context().Value("payload-key").(dto.CreateRoleDTO)
+
+	role, err := rc.roleService.CreateRole(payload)
+
+	if err != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusInternalServerError,"Error while creating role", err)
+		return
+	}
+
+	utils.WriteJsonSuccessResponse(w,http.StatusOK,"Role created Successfully!",role)
+}
+
+func (rc *RoleController) DeleteById(w http.ResponseWriter,r *http.Request){
+
+	var payload struct {
+		Id int64 `json:"id"`
+	}
+
+	if jsonErr := utils.ReadJsonBody(r, &payload); jsonErr != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusBadRequest,"Bad Input", jsonErr)
+		return
+	}
+
+	err := rc.roleService.DeleteRoleById(payload.Id)
+
+	if err != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusInternalServerError,"Error while Deleting Role", err)
+		return
+	}
+
+	utils.WriteJsonSuccessResponse(w,http.StatusOK,"Role Deleted Successfully!", "nil")
+}
+
+
+
+func (rc *RoleController) UpdateRole(w http.ResponseWriter, r *http.Request) {
+
+	payload := r.Context().Value("payload-key").(dto.UpdateRoleDTO)
+
+	role, err := rc.roleService.UpdateRole(payload)
+
+	if err != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusInternalServerError,"Error While updating role", err)
+		return
+	}
+
+	utils.WriteJsonSuccessResponse(w,http.StatusOK,"Role updated Successfully!",role)
+}
+
+func (rc *RoleController) GetRolePermissions(w http.ResponseWriter, r *http.Request){
+
+	var payload struct {
+		Id int64 `json:"id"`
+	}
+
+
+	if jsonErr := utils.ReadJsonBody(r,&payload); jsonErr != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusBadRequest,"Bad Input", jsonErr)
+		return
+	}
+
+	permissions, err := rc.roleService.GetRolePermissions(payload.Id)
+
+	if err != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusInternalServerError,"Error while getting permissions!", err)
+		return
+	}
+
+	utils.WriteJsonSuccessResponse(w,http.StatusOK,"All the Permissions Found!",permissions)
+}
+
+func (rc *RoleController) AddPermissionToRole(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Id int64 `json:"id"`
+		PermissionId int64 `json:"permissionId"`
+	}
+
+	if jsonErr := utils.ReadJsonBody(r,&payload); jsonErr != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusBadRequest,"Bad Input", jsonErr)
+		return
+	}
+
+	permission, err := rc.roleService.AddPermissionToRole(payload.Id,payload.PermissionId)
+
+	if err != nil {
+		utils.WriteJsonErrorResponse(w,http.StatusInternalServerError,"Error while Adding Permission!", err)
+		return
+	}
+
+	utils.WriteJsonSuccessResponse(w,http.StatusOK,"Permission Added Successfull!", permission)
 }

@@ -51,8 +51,10 @@ func (app *Application) Run() error {
 	uc := controllers.NewUserController(us)
 	URouter := router.NewUserRouter(uc)
 
+	rpr := repo.NewRolePermissionRepository(db)
+
 	rr := repo.NewRoleRepository(db)
-	rs := services.NewRoleService(rr)
+	rs := services.NewRoleService(rr,rpr)
 	rc := controllers.NewRoleController(rs)
 	RoleController := router.NewRoleRouter(rc)
 

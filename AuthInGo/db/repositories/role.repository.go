@@ -27,7 +27,7 @@ func NewRoleRepository(_db *sql.DB) RoleRepository{
 
 func (r *RoleRepositoryImpl) CreateRole(name string, description string) (*models.Role,error){
 
-	query := "INSERT INTO roles (name, description) VALUES (? ?)"
+	query := "INSERT INTO roles (name, description) VALUES (?, ?)"
 
 	row , err := r.db.Exec(query,name,description);
 
@@ -176,9 +176,21 @@ func (r *RoleRepositoryImpl) DeleteRoleById(id int64) error{
 func (r *RoleRepositoryImpl) UpdateRole(id int64, name string,description string) (*models.Role,error){
 
 	query := "UPDATE roles SET name = ?, description = ?, updated_at = NOW() WHERE id = ?"
-	_, err := r.db.Exec(query, name, description, id)
+
+	rows, err := r.db.Exec(query, name, description, id)
+
 	if err != nil {
 		return nil, err
+	}
+
+	rowsAffected, rowsErr := rows.RowsAffected()
+	if rowsErr != nil {
+		return nil,err
+	}
+
+	if rowsAffected == 0 {
+		fmt.Println("rows with id dosent exists")
+		return nil,sql.ErrNoRows
 	}
 
 	return &models.Role{
