@@ -21,4 +21,5 @@ app.use(genericErrorHandler);
 
 app.listen(serverConfig.PORT, () => {
     logger.info(`server is running on http://localhost:${serverConfig.PORT}`);
+
 })
