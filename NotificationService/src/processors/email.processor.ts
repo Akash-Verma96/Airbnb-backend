@@ -17,11 +17,7 @@ export function setupMailerWorker(){
                 throw new Error("Invalid job name");
             }
 
-            console.log("Processing the mail job ....!");
-
             const payload = job.data;
-
-            console.log("Job payload: ", JSON.stringify(payload));
 
             // call the service layer from here
 
