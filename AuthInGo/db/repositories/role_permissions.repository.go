@@ -117,7 +117,7 @@ func (rpr *RolePermissionRepositoryImpl) AddPermissionToRole(roleId int64, permi
 }
 
 func (rpr *RolePermissionRepositoryImpl) RemovePermissionFromRole(roleId int64, permissionId int64) error{
-	query := "DELETE FROM role_permissons where role_id = ? AND permission_id = ?"
+	query := "DELETE FROM role_permissions where role_id = ? AND permission_id = ?"
 
 	_, err := rpr.db.Exec(query,roleId,permissionId)
 

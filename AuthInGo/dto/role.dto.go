@@ -10,7 +10,17 @@ type CreateRoleDTO struct {
 }
 
 type UpdateRoleDTO struct {
-    Id          int64  `json:"id" validate:"required"`
     Name        string `json:"name" validate:"omitempty,min=3"`
     Description string `json:"description" validate:"omitempty,max=50"`
+}
+
+type AssignRoleDTO struct {
+    UserId int64 `json:"userId" validate:"required"`
+    RoleId int64 `json:"roleId" validate:"required"`
+}
+
+// AssignPermissionDTO, RemovePermissionDTO are used for assigning and removing permissions to/from roles
+type AssignPermissionDTO struct {
+    Id          int64  `json:"id" validate:"required"`
+    PermissionId        int64 `json:"permissionId" validate:"required"`
 }

@@ -69,7 +69,7 @@ func RequireAllRoles(roles ...string) func(http.Handler) http.Handler{
 	return func (next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-			userId := r.Context().Value("id").(int64)
+			userId := r.Context().Value("userId").(int64)
 
 			dbConn, dbErr := db.SetUpDB()
 
@@ -82,6 +82,7 @@ func RequireAllRoles(roles ...string) func(http.Handler) http.Handler{
 
 			hasAllowedRoles, hasRolesErr := urr.HasRoles(userId,roles)
 
+
 			if hasRolesErr != nil {
 				http.Error(w, "Error checking user roles: "+hasRolesErr.Error(), http.StatusInternalServerError)
 				return
@@ -92,8 +93,9 @@ func RequireAllRoles(roles ...string) func(http.Handler) http.Handler{
 				return
 			}
 
-			next.ServeHTTP(w,r)
+			fmt.Println("User Allowed to assign Role!");
 
+			next.ServeHTTP(w,r)
 		})
 	}
 }	

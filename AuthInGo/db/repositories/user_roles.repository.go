@@ -4,6 +4,7 @@ import (
 	"AuthInGo/models"
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 type UserRoleRepository interface {
@@ -166,9 +167,11 @@ func (ur *UserRoleRepositoryImpl) HasRole(userId int64, roleName string) (bool, 
 
 
 func (ur *UserRoleRepositoryImpl) HasRoles(userId int64, roleNames []string) (bool, error) {
+
 	if len(roleNames) == 0 {
 		return true, nil // If no roles are specified, return true
 	}
+
 
 	query := `
 		SELECT COUNT(*) = ?
@@ -177,7 +180,8 @@ func (ur *UserRoleRepositoryImpl) HasRoles(userId int64, roleNames []string) (bo
 		WHERE ur.user_id = ? AND r.name IN (?)
 		GROUP BY ur.user_id`
 
-	row := ur.db.QueryRow(query, len(roleNames), userId, roleNames)
+	roleNamesStr := strings.Join(roleNames, ",")
+	row := ur.db.QueryRow(query, len(roleNames), userId, roleNamesStr)
 
 	var hasAllRoles bool
 	if err := row.Scan(&hasAllRoles); err != nil {

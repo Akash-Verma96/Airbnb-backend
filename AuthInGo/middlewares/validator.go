@@ -133,3 +133,61 @@ func UpdateRoleRequestValidator(next http.Handler) http.Handler {
 		next.ServeHTTP(w,rWithCtx)
 	})
 }
+
+func AssignPermissionRequestValidator(next http.Handler) http.Handler {
+	return http.HandlerFunc( func (w http.ResponseWriter, r *http.Request) {
+
+		var payload dto.AssignPermissionDTO
+
+		if jsonErr := utils.ReadJsonBody(r, &payload); jsonErr != nil {
+			utils.WriteJsonErrorResponse(w,http.StatusBadRequest,"Bad Input", jsonErr)
+			return
+		}
+
+		if validationErr := utils.Validator.Struct(payload); validationErr != nil {
+			utils.WriteJsonErrorResponse(w,http.StatusInternalServerError, "Invalid Input data", validationErr)
+			return
+		}
+
+		// getting current context
+		ctx := r.Context()
+
+		// Derive new context with the target value
+		ctx = context.WithValue(ctx,"payload-key",payload)
+
+		//	Injecting the new context into a shallow copy of the request
+		rWithCtx := r.WithContext(ctx)
+
+
+		next.ServeHTTP(w,rWithCtx)
+	})
+}
+
+func RemovePermissionRequestValidator(next http.Handler) http.Handler {
+	return http.HandlerFunc( func (w http.ResponseWriter, r *http.Request) {
+
+		var payload dto.AssignPermissionDTO
+
+		if jsonErr := utils.ReadJsonBody(r, &payload); jsonErr != nil {
+			utils.WriteJsonErrorResponse(w,http.StatusBadRequest,"Bad Input", jsonErr)
+			return
+		}
+
+		if validationErr := utils.Validator.Struct(payload); validationErr != nil {
+			utils.WriteJsonErrorResponse(w,http.StatusInternalServerError, "Invalid Input data", validationErr)
+			return
+		}
+
+		// getting current context
+		ctx := r.Context()
+
+		// Derive new context with the target value
+		ctx = context.WithValue(ctx,"payload-key",payload)
+
+		//	Injecting the new context into a shallow copy of the request
+		rWithCtx := r.WithContext(ctx)
+
+
+		next.ServeHTTP(w,rWithCtx)
+	})
+}
