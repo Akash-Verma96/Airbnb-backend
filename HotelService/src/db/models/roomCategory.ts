@@ -11,7 +11,7 @@ export enum RoomType {
 
 class RoomCategory extends Model<InferAttributes<RoomCategory>, InferCreationAttributes<RoomCategory>>{
     declare id: CreationOptional<number>;
-    declare hotel_id: number;
+    declare hotelId: number;
     declare roomType: RoomType;
     declare roomNo: number;
     declare price: number;
@@ -27,7 +27,7 @@ RoomCategory.init({
         primaryKey: true,
         allowNull: false
     },
-    hotel_id: {
+    hotelId: {
         type: DataTypes.INTEGER,
         allowNull: false,
     },

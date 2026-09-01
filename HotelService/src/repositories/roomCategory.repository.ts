@@ -10,7 +10,7 @@ export class RoomCategoryRepository extends BaseRepository<RoomCategory>{
     async findRoomCategoryByHotelId(hotelId: number){
         const roomCategory = await this.model.findAll({
             where:{
-                hotel_id: hotelId,
+                hotelId: hotelId,
                 deletedAt: null
             }
         })
@@ -18,4 +18,4 @@ export class RoomCategoryRepository extends BaseRepository<RoomCategory>{
 
             return roomCategory;
         }
-    }
+}

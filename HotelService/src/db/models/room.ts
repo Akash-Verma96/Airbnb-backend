@@ -1,16 +1,18 @@
 import { CreationOptional, DataTypes, InferAttributes, InferCreationAttributes, Model } from "sequelize";
 import sequelize from "./sequelize";
+import RoomCategory from "./roomCategory";
 
 
 class Room extends Model<InferAttributes<Room>, InferCreationAttributes<Room>>{
     declare id: CreationOptional<number>;
-    declare hotel_id: number;
-    declare dateOfAvailabilty: Date;
+    declare hotelId: number;
+    declare roomCategoryId: number;
+    declare dateOfAvailability: Date;
     declare createdAt: CreationOptional<Date>;
     declare updatedAt: CreationOptional<Date>;
+    declare deletedAt: CreationOptional<Date> | null;
     declare booking_id?: number;
     declare price: number;
-    declare room_no: number
 }
 
 Room.init(
@@ -21,7 +23,15 @@ Room.init(
             primaryKey: true,
             allowNull: false,
        },
-       hotel_id: {
+       roomCategoryId: {
+            type: 'INTEGER',
+            allowNull: false,
+            references: {
+                model: RoomCategory,
+                key: 'id',
+            },
+        },
+       hotelId: {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
@@ -31,7 +41,7 @@ Room.init(
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
        },
-       dateOfAvailabilty: {
+       dateOfAvailability: {
         type: DataTypes.DATE,
         allowNull: false
        },
@@ -41,16 +51,16 @@ Room.init(
        updatedAt: {
         type: DataTypes.DATE,
        },
+       deletedAt: {
+        type: 'DATE',
+        defaultValue: null,
+        },
        booking_id: {
         type: DataTypes.INTEGER,
         defaultValue: null
        },
        price: {
         type: DataTypes.FLOAT,
-        allowNull: false
-       },
-       room_no: {
-        type: DataTypes.INTEGER,
         allowNull: false
        }
     },{
