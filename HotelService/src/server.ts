@@ -5,6 +5,7 @@ import v2Router from './routers/v2/index.router';
 import { genericErrorHandler } from './middleware/error.middleware';
 import { logger } from './config/logger.config';
 import { attachCorrelationMiddleware } from './middleware/correlation.middleware';
+import { setupRoomGenerationWorker } from './processors/roomGeneration.processor';
 
 
 
@@ -22,4 +23,6 @@ app.use(genericErrorHandler);
 
 app.listen(serverConfig.PORT, () => {
     logger.info(`server is running on http://localhost:${serverConfig.PORT}`);
+    setupRoomGenerationWorker()
+    logger.info("Room Generation worker set up successfully!");
 })
