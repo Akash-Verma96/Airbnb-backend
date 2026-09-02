@@ -13,6 +13,7 @@ class Room extends Model<InferAttributes<Room>, InferCreationAttributes<Room>>{
     declare deletedAt: CreationOptional<Date> | null;
     declare booking_id?: number;
     declare price: number;
+    declare roomNo: number;
 }
 
 Room.init(
@@ -61,6 +62,10 @@ Room.init(
        },
        price: {
         type: DataTypes.FLOAT,
+        allowNull: false
+       },
+       roomNo: {
+        type: DataTypes.INTEGER,
         allowNull: false
        }
     },{

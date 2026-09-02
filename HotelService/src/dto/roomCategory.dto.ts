@@ -1,7 +1,7 @@
 import { RoomType } from "../db/models/roomCategory"
 
 export type createRoomCategroyDTO = {
-    hotel_id: number,
+    hotelId: number,
     roomType: RoomType,
     roomNo: number,
     price: number

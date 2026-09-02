@@ -9,10 +9,11 @@ module.exports = {
       CREATE TABLE IF NOT EXISTS rooms (
         id INT PRIMARY KEY AUTO_INCREMENT,
         hotel_id INT NOT NULL,
-        date_of_availabilty DATETIME NOT NULL,
+        date_of_availability DATETIME NOT NULL,
         booking_id INT DEFAULT NULL,
         room_category_id INT,
         room_no INT NOT NULL,
+        price INT NOT NULL,
 
         created_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL,

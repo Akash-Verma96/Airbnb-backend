@@ -11,7 +11,7 @@ import { RoomRepository } from "../repositories/room.repository";
 const roomCategoryRepository = new RoomCategoryRepository();
 const roomRepository = new RoomRepository();
 
-export async function RoomGeneration(jobData : RoomGenerationJob) {
+export async function generateRooms(jobData : RoomGenerationJob) {
 
 
     let totalRoomsCreated = 0;
@@ -89,6 +89,7 @@ export async function processDateBatch(roomCategory: RoomCategory,startDate: Dat
                 roomCategoryId: roomCategory.id,
                 dateOfAvailability: new Date(currentDate),
                 price: priceOverride || roomCategory.price,
+                roomNo: roomCategory.roomNo,
                 createdAt: new Date(),
                 updatedAt: new Date(),
                 deletedAt: null,

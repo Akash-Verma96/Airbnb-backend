@@ -3,6 +3,7 @@ import { createHotelService, softDeleteService, getAllHotelService, getHotelById
 import { StatusCodes } from "http-status-codes";
 
 
+
 export async function createHotelHandler(req: Request, res: Response, next: NextFunction){
     // call service layer
 
@@ -58,3 +59,4 @@ export async function updateHotelNameByIdHandler(req: Request, res: Response, ne
         success: true
     })
 }
+
