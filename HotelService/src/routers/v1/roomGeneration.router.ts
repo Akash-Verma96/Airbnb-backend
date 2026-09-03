@@ -6,7 +6,11 @@ import { RoomGenerationJobSchema } from "../../dto/roomGeneration.dto";
 
 const roomGenerationRuter = express.Router();
 
-
+/**
+ * @route POST /api/v1/generateRooms
+ * @desc Generates the rooms for first time mannually
+ * @access Public
+ */
 roomGenerationRuter.post('/generateRooms', validateRequestBody(RoomGenerationJobSchema),  generateRoomHandler)
 
 
