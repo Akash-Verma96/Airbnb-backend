@@ -8,7 +8,6 @@ interface userParams {
 }
 
 export const createBookingHandler = async (req: Request, res: Response) => {
-
     const booking = await createBookingService(req.body);
 
     return res.status(StatusCodes.OK).json({

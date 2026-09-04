@@ -1,6 +1,13 @@
 import { z } from 'zod'
 
-// TODO: Extend the controller to take request schema and decide whether it wants a sync or async flow
+/* TODO: Extend the controller to take request schema and decide whether it wants a sync or async flow
+
+    - Create a controller and take payload from user and check wheather he wants immediate or scheduled from payload you can check
+    - Based on the requirment call the service layer
+    - call service startScheduler() for scheduled type 
+    - call addRoomGenerationToQueue(req.body) for immediate generation
+    - you can decide this inside roomGeneration/roomScheduler controller
+*/
 export const RoomGenerationRequestSchema = z.object({
     roomCategoryId: z.number().positive(),
     startDate: z.iso.datetime(),

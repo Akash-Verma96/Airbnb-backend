@@ -13,6 +13,7 @@
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.9.0",
     "@prisma/client": "^7.9.0",
+    "axios": "^1.20.0",
     "bullmq": "^5.81.2",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
