@@ -13,6 +13,9 @@
 
 ---
 
+## API Documentation
+See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for the full reference.
+
 ## 📖 Overview
 
 This project is a **scalable backend system** for a property-rental platform inspired by Airbnb, architected as independent microservices rather than a monolith. It is designed for backend engineers and hiring teams who want to see real-world patterns: service decomposition, asynchronous inter-service communication via message queues, and type-safe API design with TypeScript. The platform solves the core challenge of keeping booking reliability, hotel data management, and user notifications loosely coupled and independently deployable.
@@ -54,32 +57,32 @@ This project is a **scalable backend system** for a property-rental platform ins
 The system follows an **event-driven microservices** pattern. Each service owns its domain completely and communicates asynchronously through a shared Redis-backed Bull Queue.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    Client / API Consumer             │
-└────────────────────┬────────────────────────────────┘
-                     │ HTTP Requests
-          ┌──────────▼──────────┐
-          │    HotelService     │  ← Manages hotel inventory,
-          │     (Port 3001)     │    listings, and room data
-          └──────────┬──────────┘
-                     │ Hotel Lookup
-          ┌──────────▼──────────┐
-          │   BookingService    │  ← Handles reservations,
-          │     (Port 3002)     │    availability, cancellations
-          └──────────┬──────────┘
-                     │ Queues email job
-          ┌──────────▼──────────┐      ┌──────────────┐
-          │   Bull Queue        │─────▶│NotificationSvc│
-          │   (Redis-backed)    │      │  (Port 3003)  │
-          └─────────────────────┘      │  Sends Email  │
-                                       └──────────────┘
-          ┌─────────────────────┐
-          │  MYSQL         │  ← Hotel & Booking data
-          └─────────────────────┘
-          ┌─────────────────────┐
-          │  Redis              │  ← Queue state & cache
-          └─────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                       Client Application                    │
+└────────────────────────────┬────────────────────────────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              │                             │
+   ┌──────────▼──────────┐      ┌──────────▼──────────┐
+   │    HotelService     │      │   BookingService    │
+   │    Port: 3001       │◄─────│   Port: 3002       │
+   │  (Sequelize + MySQL)│ HTTP │ Prisma + MySQL/Maria│
+   └─────────────────────┘      └──────────┬──────────┘
+              │                            │
+   ┌──────────▼──────────┐                 │
+   │   Redis + BullMQ    │◄────────────────┘
+   │  (Room Gen Queue)   │
+   └──────────┬──────────┘
+              │ Job Processing
+   ┌──────────▼──────────┐      ┌─────────────────────┐
+   │  RoomGeneration     │      │  NotificationService│
+   │     Worker          │      │  (Mailer Worker)    │
+   └─────────────────────┘      └─────────────────────┘
 ```
+
+**Data Stores**
+- **MySQL** — Hotel inventory (Sequelize) · Booking records (Prisma)
+- **Redis** — BullMQ queue state · Redlock distributed locks
 
 **Flow summary:**
 1. The client queries `HotelService` to browse available properties.
@@ -109,20 +112,25 @@ cd Airbnb-backend
 
 Each service requires its own `.env` file. Use the templates below.
 
-**`BookingService/.env`**
-```env
-PORT=3002
-DATABASE_URL="MYSQL://USER:PASSWORD@localhost:5432/airbnb_bookings"
-REDIS_HOST=localhost
-REDIS_PORT=6379
-JWT_SECRET=your_jwt_secret_here
-```
-
 **`HotelService/.env`**
 ```env
 PORT=3001
-DATABASE_URL="MYSQL://USER:PASSWORD@localhost:5432/airbnb_hotels"
-JWT_SECRET=your_jwt_secret_here
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=airbnb_hotels
+REDIS_HOST=localhost
+REDIS_PORT=6379
+ROOM_CRON=0 2 * * *
+```
+
+**`BookingService/.env`**
+```env
+PORT=3002
+DATABASE_URL="mysql://USER:PASSWORD@localhost:3306/airbnb_bookings"
+REDIS_SERVER_URL=redis://localhost:6379
+LOCK_TTL=5000
+HOTEL_SERVICE_URL=http://localhost:3001
 ```
 
 **`NotificationService/.env`**
@@ -130,10 +138,8 @@ JWT_SECRET=your_jwt_secret_here
 PORT=3003
 REDIS_HOST=localhost
 REDIS_PORT=6379
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
-SMTP_PASS=your_app_password
+MAIL_USER=your_email@gmail.com
+MAIL_PASS=your_app_password
 ```
 
 ### 3. Install Dependencies (per service)
@@ -193,53 +199,17 @@ Services will be available at:
 
 ## 📡 API Reference
 
-### HotelService — `http://localhost:3001`
+Full endpoint reference — request bodies, response schemas, query parameters, 
+error codes, and data models — is documented in:
 
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/api/hotels` | Create a new hotel listing | ✅ |
-| `GET` | `/api/hotels` | Retrieve all hotels (supports query filters) | ❌ |
-| `GET` | `/api/hotels/:id` | Get a single hotel by ID | ❌ |
-| `PUT` | `/api/hotels/:id` | Update hotel details | ✅ |
-| `DELETE` | `/api/hotels/:id` | Remove a hotel listing | ✅ |
+**[→ API_DOCUMENTATION.md](./API_DOCUMENTATION.md)**
 
-### BookingService — `http://localhost:3002`
-
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/api/bookings` | Create a new reservation | ✅ |
-| `GET` | `/api/bookings/:id` | Get booking details by ID | ✅ |
-| `GET` | `/api/bookings/user/:userId` | List all bookings for a user | ✅ |
-| `PATCH` | `/api/bookings/:id/cancel` | Cancel an existing booking | ✅ |
-
-**Sample Request — Create Booking:**
-```json
-POST /api/bookings
-Content-Type: application/json
-Authorization: Bearer <token>
-
-{
-  "hotelId": "uuid-here",
-  "roomId": "uuid-here",
-  "checkIn": "2024-12-01",
-  "checkOut": "2024-12-07",
-  "guestCount": 2
-}
-```
-
-**Sample Response:**
-```json
-{
-  "status": "success",
-  "booking": {
-    "id": "booking-uuid",
-    "status": "CONFIRMED",
-    "totalPrice": 420.00,
-    "checkIn": "2024-12-01",
-    "checkOut": "2024-12-07"
-  }
-}
-```
+Quick summary:
+- **HotelService** — 14 endpoints covering hotel CRUD, room availability, 
+  room generation jobs, and the availability scheduler
+- **BookingService** — 2 endpoints implementing a two-phase booking flow 
+  with distributed locking
+- **NotificationService** — background worker only, no public HTTP endpoints
 
 ---
 
@@ -249,7 +219,10 @@ Authorization: Bearer <token>
 
 **The Problem:** When two users simultaneously attempted to book the last available room, both requests would read "1 room available," pass the validation check, and both get confirmed — resulting in an over-committed booking.
 
-**The Solution:** The availability check and reservation write were wrapped in a **Prisma transaction with optimistic locking**. The room record is updated atomically: if two concurrent writes race, the second transaction detects the stale read and rolls back gracefully, returning a `409 Conflict` to the client. This eliminated the race condition without introducing heavy pessimistic locks that would throttle throughput.
+**The Solution:** A **Redlock distributed lock** (via Redis) is acquired on 
+`hotel:<hotelId>` before the availability check runs. This ensures only one 
+booking request can proceed at a time per hotel, eliminating the race condition. 
+The lock is scoped to a configurable TTL (`LOCK_TTL` env var, default 5000ms).
 
 ---
 
