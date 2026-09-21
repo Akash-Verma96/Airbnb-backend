@@ -9,8 +9,8 @@ import (
 )
 
 type UserService interface {
-	Create(payload *dto.CreateUserDTO) error
-	LoginUser(payload *dto.LoginUserDTO) (string, error)
+	Create(payload *dto.CreateUserDTO) (dto.UserResult, error)
+	LoginUser(payload *dto.LoginUserDTO) (dto.UserResult, error)
 	GetUserById(id int64) (*models.User, error)
 	GetAll() ([]*models.User)
 	DeleteById(id int64) error
@@ -26,26 +26,41 @@ func NewUserService(_userRepository db.UserRepository) UserService {
 	}
 }
 
-func (us * UserServiceImpl) Create(payload *dto.CreateUserDTO) error{
+func (us * UserServiceImpl) Create(payload *dto.CreateUserDTO) (dto.UserResult,error){
 	fmt.Println("Creating the User reached at Service!")
+	var data dto.UserResult;
 
 	//hashing the password
 	hashedPassword, err := utils.HashPassword(payload.Password)
 
 	if err != nil {
 		fmt.Println("Error hashing password", err)
-		return nil
+		return data,nil
 	}
 
-	us.UserRepository.Create(payload.Username,payload.Email,hashedPassword)
-	return nil
+	User,JwtToken, err := us.UserRepository.Create(payload.Username,payload.Email,hashedPassword)
+
+	if User == nil || JwtToken == ""{
+		fmt.Println("User is nil!")
+		return data,err
+	}
+	
+	
+	data.User = User
+	data.JwtToken = JwtToken
+	return data,nil
 }
 
-func (us *UserServiceImpl) LoginUser(payload *dto.LoginUserDTO) (string,error) {
+func (us *UserServiceImpl) LoginUser(payload *dto.LoginUserDTO) (dto.UserResult,error) {
 	fmt.Println("Loging the user reached at service")
-	user, err := us.UserRepository.LoginUser(payload.Email,payload.Password)
 
-	return user, err
+	User,JwtToken, err := us.UserRepository.LoginUser(payload.Email,payload.Password)
+
+	var data dto.UserResult;
+	data.User = User
+	data.JwtToken = JwtToken
+
+	return data, err
 }
 
 func (us * UserServiceImpl) GetUserById(id int64) (*models.User, error) {

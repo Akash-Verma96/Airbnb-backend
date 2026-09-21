@@ -1,10 +1,10 @@
 package db
 
 import (
+	env "AuthInGo/config/env"
 	"AuthInGo/models"
 	"AuthInGo/utils"
 	"database/sql"
-	env "AuthInGo/config/env"
 	"fmt"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -12,8 +12,8 @@ import (
 
 // added Interface
 type UserRepository interface {
-	Create(name string, email string, hashedPassword string) error
-	LoginUser(email string, password string) (string, error)
+	Create(name string, email string, hashedPassword string) (*models.User, string, error)
+	LoginUser(email string, password string) (*models.User,string, error)
 	GetById(id int64) (*models.User, error) 
 	GetByEmail(email string) (*models.User, error)
 	GetAll() ([]*models.User, error)
@@ -32,7 +32,7 @@ func NewUserRepository(_db *sql.DB) UserRepository{
 	}
 }
 
-func (ur *UserRepositoryImpl) Create(name string, email string, hashedPassword string) error {
+func (ur *UserRepositoryImpl) Create(name string, email string, hashedPassword string) (*models.User, string, error) {
 	fmt.Println(("Creating the user!"))
 
 	query := "INSERT INTO users (username, email, password) VALUES (?, ?, ?)"
@@ -41,43 +41,66 @@ func (ur *UserRepositoryImpl) Create(name string, email string, hashedPassword s
 
 	if err != nil {
 		fmt.Println("Error while executing the query", err)
-		return err
+		return nil,"",err
 	}
 
 	rowsAffected , affectedErr := row.RowsAffected()
 
 	if affectedErr != nil {
 			fmt.Println("Error while checking affected row!", affectedErr)
-			return affectedErr
+			return nil,"",affectedErr
 	}
 
 	if rowsAffected == 0 {
 		fmt.Println("No rows were affected, user not created")
-		return nil
+		return nil,"",nil
 	}
 
 	fmt.Println("User created Successfully!")
 
-	return nil
+	
+	id, err := row.LastInsertId()
+	if err != nil {
+		return nil,"", err
+	}
+
+	payload := jwt.MapClaims{
+		"email": email,
+		"id": id,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, payload)
+	// Sign and get the complete encoded token as a string using the secret
+	jwtToken, err := token.SignedString([]byte(env.GetString("JWT_SECRET", "TOKEN")))
+
+	if err != nil {
+		fmt.Println("Error while creating token !")
+		return nil,"",err
+	}
+
+	return &models.User{
+		Username: name,
+		Email: email,
+	},jwtToken,nil
 }
 
 
 
 
 
-func (ur *UserRepositoryImpl) LoginUser(email string, password string) (string, error) {
+func (ur *UserRepositoryImpl) LoginUser(email string, password string) (*models.User, string, error) {
 	fmt.Println("Loging the user...")
 	// db call
 	user, err := ur.GetByEmail(email)
 
 	if err != nil {
 		fmt.Println("User not found",err)
-		return "", err
+		return nil,"", err
 	}
 
 	if user == nil {
 		fmt.Println("No User found with this email!")
-		return "", nil
+		return nil,"", nil
 	}
 
 	passwordMatch  := utils.MatchPassword(password,user.Password)
@@ -97,7 +120,7 @@ func (ur *UserRepositoryImpl) LoginUser(email string, password string) (string, 
 	// Sign and get the complete encoded token as a string using the secret
 	jwtToken, err := token.SignedString([]byte(env.GetString("JWT_SECRET", "TOKEN")))
 
-	return jwtToken, nil
+	return user,jwtToken, nil
 }
 
 

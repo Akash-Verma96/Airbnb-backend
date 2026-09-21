@@ -18,14 +18,25 @@ func NewUserController(_userService services.UserService) *UserController{
 }
 
 
+func (uc *UserController) Ping(w http.ResponseWriter, r *http.Request){
+
+	utils.WriteJsonSuccessResponse(w,http.StatusOK, "Service Health OK! check Completed", "NULL");
+}
+
+
 func (uc *UserController) CreateUser(w http.ResponseWriter, r *http.Request) {
 	
 	payload := r.Context().Value("payload-key").(dto.CreateUserDTO)
 
-	uc.UserService.Create(&payload)
+	data, err := uc.UserService.Create(&payload)
+
+	if err != nil || data.JwtToken == "" {
+		utils.WriteJsonErrorResponse(w,http.StatusInternalServerError, "Failed to Login!", err)
+		return
+	}
 
 
-	utils.WriteJsonSuccessResponse(w,http.StatusOK, "User Created Successfully", "User Created!")
+	utils.WriteJsonSuccessResponse(w,http.StatusOK, "User Created Successfully", data)
 }
 
 
@@ -37,14 +48,16 @@ func (uc *UserController) LoginUser(w http.ResponseWriter, r *http.Request) {
 	
 	payload := r.Context().Value("payload-key").(dto.LoginUserDTO)
 
-	jwtToken, err := uc.UserService.LoginUser(&payload)
 
-	if err != nil || jwtToken == "" {
+	data, err := uc.UserService.LoginUser(&payload)
+
+
+	if err != nil || data.JwtToken == "" {
 		utils.WriteJsonErrorResponse(w,http.StatusInternalServerError, "Failed to Login!", err)
 		return
 	}
 
-	utils.WriteJsonSuccessResponse(w,http.StatusOK, "User Logged In succesfully!", jwtToken)
+	utils.WriteJsonSuccessResponse(w,http.StatusOK, "User Logged In succesfully!", data)
 }
 
 
