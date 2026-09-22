@@ -2,6 +2,7 @@ import { getAvailableRooms, updateRoomAvailability } from "../api/hotel.api";
 import { serverConfig } from "../config";
 import { redlock } from "../config/redis.config";
 import { createBookingDto } from "../dto/booking.dto";
+import { Prisma } from "../generated/prisma/client";
 import { prismaClient } from "../lib/prisma";
 import { confirmBooking, createBooking, createIdempotencyKey, finalizeIdempotencyKey, getAllBookings, getIdempotencyKeyWithLock } from "../repositories/booking.repository";
 import { BadRequestError, InternalServerError, NotFoundError } from "../utils/errors/app.error";
@@ -66,7 +67,7 @@ export async function createBookingService(createBookingDto: createBookingDto){
 
 // explore potential issues in this service race condition-- Fixed
 export async function confirmBookingService(idempotencyKey: string){
-    return await prismaClient.$transaction(async (tx) =>{
+    return await prismaClient.$transaction(async (tx: Prisma.TransactionClient) =>{
         const idempotencyKeyData = await getIdempotencyKeyWithLock(tx,idempotencyKey);
 
         if(!idempotencyKeyData){
