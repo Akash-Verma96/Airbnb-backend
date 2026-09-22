@@ -50,8 +50,9 @@ export async function softDeleteHandler(req: Request,res: Response, next: NextFu
     })
 }
 
-export async function updateHotelNameByIdHandler(req: Request, res: Response, next: NextFunction){
-    const updateHotel = await updateHotelByIdService(req.body);
+
+export async function updateHotelByIdHandler(req: Request, res: Response, next: NextFunction){
+    const updateHotel = await updateHotelByIdService(Number(req.params.id), req.body);
 
     res.status(StatusCodes.ACCEPTED).json({
         message: "Hotel Updated Successfully",

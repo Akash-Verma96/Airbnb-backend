@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { confirmBookingService, createBookingService } from '../services/booking.service';
+import { confirmBookingService, createBookingService, getAllBookingsService } from '../services/booking.service';
 import { StatusCodes } from 'http-status-codes';
 
 
@@ -23,4 +23,13 @@ export const confirmBookingHandler = async (req: Request<userParams>, res: Respo
         bookingId: booking.id,
         status: booking.status,
     });
+}
+
+export const getAllBookingsHandler = async (req: Request, res: Response) => {
+    const bookings = await getAllBookingsService(Number(req.params.id));
+
+    res.status(StatusCodes.OK).json({
+        message: "Booking fetched successfully!",
+        data: bookings
+    })
 }

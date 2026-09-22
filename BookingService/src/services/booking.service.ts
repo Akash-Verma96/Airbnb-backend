@@ -3,7 +3,7 @@ import { serverConfig } from "../config";
 import { redlock } from "../config/redis.config";
 import { createBookingDto } from "../dto/booking.dto";
 import { prismaClient } from "../lib/prisma";
-import { confirmBooking, createBooking, createIdempotencyKey, finalizeIdempotencyKey, getIdempotencyKeyWithLock } from "../repositories/booking.repository";
+import { confirmBooking, createBooking, createIdempotencyKey, finalizeIdempotencyKey, getAllBookings, getIdempotencyKeyWithLock } from "../repositories/booking.repository";
 import { BadRequestError, InternalServerError, NotFoundError } from "../utils/errors/app.error";
 import { generateIdempotencyKey } from "../utils/generateIdempotencyKey";
 
@@ -84,4 +84,8 @@ export async function confirmBookingService(idempotencyKey: string){
 
         return booking;
     })
+}
+
+export async function getAllBookingsService(userId: number){
+    return await getAllBookings(userId);
 }

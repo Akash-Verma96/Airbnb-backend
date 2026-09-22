@@ -14,28 +14,32 @@ datasource db {
 
 
 model Booking {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  hotelId    Int
-  checkInDate DateTime
-  checkOutDate DateTime
-  roomCategoryId Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  bookingAmount Int
-  status BookingStatus @default(PENDING)
-  totalGuests Int
+  id             Int           @id @default(autoincrement())
+  userId         Int           @map("user_id")
+  hotelId        Int           @map("hotel_id")
+  checkInDate    DateTime      @map("check_in_date")
+  checkOutDate   DateTime      @map("check_out_date")
+  roomCategoryId Int           @map("room_category_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  bookingAmount  Int           @map("booking_amount")
+  status         BookingStatus @default(PENDING)
+  totalGuests    Int           @map("total_guests")
   idempotencyKey IdempotencyKey?
+
+  @@map("booking")
 }
 
 model IdempotencyKey {
   id        Int      @id @default(autoincrement())
-  idemKey       String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  finalized Boolean @default(false)
-  bookingId Int   @unique
-  booking Booking? @relation(fields: [bookingId], references: [id])
+  idemKey   String   @unique @map("idem_key")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  finalized Boolean  @default(false)
+  bookingId Int      @unique @map("booking_id")
+  booking   Booking? @relation(fields: [bookingId], references: [id])
+
+  @@map("idempotency_key")
 }
 
 enum BookingStatus {

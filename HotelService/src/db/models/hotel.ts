@@ -1,5 +1,6 @@
 import { Model, InferAttributes, InferCreationAttributes, CreationOptional } from 'sequelize';
 import sequelize from './sequelize';
+import { RoomType } from './roomCategory';
 
 
 class Hotel extends Model<InferAttributes<Hotel>, InferCreationAttributes<Hotel>> {
@@ -7,6 +8,9 @@ class Hotel extends Model<InferAttributes<Hotel>, InferCreationAttributes<Hotel>
   declare name: string;
   declare address: string;
   declare location: string;
+  declare price: number;
+  declare roomType: RoomType;
+  declare hostId: number;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
   declare rating?: number;
@@ -32,6 +36,18 @@ Hotel.init(
     location: {
       type: 'STRING',
       allowNull: false,
+    },
+    roomType: {
+      type: 'ENUM',
+      values: [...Object.values(RoomType)],
+    },
+    price: {
+      type: 'INTEGER',
+      allowNull: false
+    },
+    hostId: {
+      type: 'INTEGER',
+      allowNull: false
     },
     createdAt: {
       type: 'DATE',

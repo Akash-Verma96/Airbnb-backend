@@ -65,6 +65,17 @@ export async function getBookingById(bookingId: number){
     return booking;
 }
 
+export async function getAllBookings(userId: number){
+    const bookings = await prismaClient.booking.findMany({
+        where:{
+            status: "CONFIRMED",
+            userId: userId
+        }
+    })
+
+    return bookings;
+}
+
 export async function confirmBooking(tx: Prisma.TransactionClient, bookingId: number){
     const booking = await tx.booking.update({
         where: {

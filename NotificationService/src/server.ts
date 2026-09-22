@@ -6,7 +6,7 @@ import { genericErrorHandler } from './middleware/error.middleware';
 import { logger } from './config/logger.config';
 import { attachCorrelationMiddleware } from './middleware/correlation.middleware';
 import { setupMailerWorker } from './processors/email.processor';
-import { addEmailToQueue } from './producers/email.producer';
+// import { addEmailToQueue } from './producers/email.producer';
 
 
 
@@ -38,5 +38,7 @@ app.listen(serverConfig.PORT, () => {
         }
     }
 
-    addEmailToQueue(notificationDto);
+    console.log(notificationDto)
+
+    // addEmailToQueue(notificationDto);
 })
