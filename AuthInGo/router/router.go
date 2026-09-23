@@ -19,7 +19,7 @@ func SetUpRouter(UserRouter Router, RoleRouter Router) *chi.Mux {
 
 	chiRouter.Use(cors.Handler(cors.Options{
 		
-		AllowedOrigins:   []string{"https://*", "http://localhost:5173"},
+		AllowedOrigins:   []string{"*"},
 		
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
@@ -31,6 +31,9 @@ func SetUpRouter(UserRouter Router, RoleRouter Router) *chi.Mux {
 
 	chiRouter.HandleFunc("/HotelService/*", utils.ProxyToService("https://airbnb-hotel-0job.onrender.com", "/HotelService"))
 	chiRouter.HandleFunc("/BookingService/*", utils.ProxyToService("https://airbnb-backend-glo7.onrender.com", "/BookingService"))
+
+	// chiRouter.HandleFunc("/HotelService/*", utils.ProxyToService("http://localhost:3001", "/HotelService"))
+	// chiRouter.HandleFunc("/BookingService/*", utils.ProxyToService("http://localhost:3002", "/BookingService"))
 
 	UserRouter.Register(chiRouter)
 	RoleRouter.Register(chiRouter)
