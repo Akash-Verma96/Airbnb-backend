@@ -13,8 +13,7 @@ import { setupRoomGenerationWorker } from './processors/roomGeneration.processor
 const app = express();
 
 app.use(cors({
-    // origin: 'http://localhost:5173',
-    origin: '*',
+    origin: 'https://airbnb-auth.onrender.com',
     credentials: true // Set to true if you need to pass cookies or authorization headers
 }));
 
