@@ -11,7 +11,7 @@ import { attachCorrelationMiddleware } from './middleware/correlation.middleware
 const app = express();
 
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: 'https://airbnb-auth.onrender.com',
     credentials: true 
 }));
 
