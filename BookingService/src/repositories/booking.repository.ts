@@ -11,7 +11,6 @@ import { validate as isValidUUID } from 'uuid';
     confirmBooking  -- Done
     cancelBooking   -- Done
     finalizIdempotencyKey   -- Done
-
 */
 
 export async function createBooking(bookingInput: Prisma.BookingCreateInput){
@@ -45,7 +44,7 @@ export async function getIdempotencyKeyWithLock(tx: Prisma.TransactionClient, ke
     }
 
     const idempotencyKey: Array<IdempotencyKey> = await tx.$queryRaw
-        `SELECT * FROM IdempotencyKey WHERE idemKey = ${key} FOR UPDATE`
+        `SELECT * FROM idempotency_key WHERE idem_key = ${key} FOR UPDATE`
     
 
     if(!idempotencyKey || idempotencyKey.length === 0){
