@@ -19,7 +19,7 @@ func SetUpRouter(UserRouter Router, RoleRouter Router) *chi.Mux {
 
 	chiRouter.Use(cors.Handler(cors.Options{
 		
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   []string{"https://airbnb-api-docs-dg88.onrender.com/"},
 		
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
