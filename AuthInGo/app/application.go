@@ -43,7 +43,7 @@ func (app *Application) Run() error {
 	db, err := DBconfig.SetUpDB()
 
 	if err != nil {
-		fmt.Println("Error while connecting DB")
+		fmt.Println("Error while connecting DB", err)
 	}
 
 	ur := repo.NewUserRepository(db)
