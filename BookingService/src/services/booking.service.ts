@@ -5,7 +5,7 @@ import { createBookingDto } from "../dto/booking.dto";
 import { Prisma } from "../generated/prisma/client";
 import { prismaClient } from "../lib/prisma";
 import { confirmBooking, createBooking, createIdempotencyKey, finalizeIdempotencyKey, getAllBookings, getIdempotencyKeyWithLock } from "../repositories/booking.repository";
-import { BadRequestError, InternalServerError, NotFoundError } from "../utils/errors/app.error";
+import { BadRequestError, NotFoundError } from "../utils/errors/app.error";
 import { generateIdempotencyKey } from "../utils/generateIdempotencyKey";
 
 type AvailableRoom = {
@@ -22,7 +22,7 @@ export async function createBookingService(createBookingDto: createBookingDto){
 
     try {
         await redlock.acquire([bookingResourse],ttl);
-        // modifies the room resource id
+        
         const availableRooms = await getAvailableRooms(createBookingDto.roomCategoryId,createBookingDto.checkInDate,createBookingDto.checkOutDate);
         console.log(availableRooms)
         const checkOutDate = new Date(createBookingDto.checkOutDate);
@@ -61,7 +61,7 @@ export async function createBookingService(createBookingDto: createBookingDto){
         if (error.name === 'BadRequestError' || error.statusCode === 400) {
             throw error;
         }
-        throw new InternalServerError("Error already lock acquired by other person.");
+        throw error;
     }
 }
 
