@@ -1,5 +1,4 @@
 import express from 'express'
-import cors from 'cors'
 import { serverConfig } from './config';
 import v1Router from './routers/v1/index.router';
 import v2Router from './routers/v2/index.router';
@@ -12,10 +11,6 @@ import { setupRoomGenerationWorker } from './processors/roomGeneration.processor
 
 const app = express();
 
-app.use(cors({
-    origin: 'https://airbnb-auth.onrender.com',
-    credentials: true // Set to true if you need to pass cookies or authorization headers
-}));
 
 app.use(express.json()); // Middleware to parse JSON request bodies used for serialization and deserialization of data in the request body
 app.use(express.text());
