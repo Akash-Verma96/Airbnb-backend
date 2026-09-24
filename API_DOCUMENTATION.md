@@ -1,544 +1,787 @@
 # Airbnb Backend — API Reference Documentation
 
 > **Repository:** [Akash-Verma96/Airbnb-backend](https://github.com/Akash-Verma96/Airbnb-backend)  
-> **Architecture:** Microservices — Node.js · TypeScript · MySQL · Redis · BullMQ  
-> **Generated from:** Live codebase analysis (routes, controllers, validators, DTOs, Prisma schema, Sequelize models)
+> **Architecture:** Microservices — Node.js · TypeScript · Go · MySQL · Redis · BullMQ  
+> **Updated from:** September 2026 backend source code (routes, controllers, validators, DTOs, Prisma schema, Sequelize models, AuthInGo middleware)
 
 ---
 
 ## Table of Contents
 
 1. [System Overview](#1-system-overview)
-2. [Global Conventions](#2-global-conventions)
-3. [Error Format](#3-error-format)
-4. [HotelService (Port 3001)](#4-hotelservice-port-3001)
-   - [Health Check](#41-health-check)
-   - [Hotel Endpoints](#42-hotel-endpoints)
-   - [Room Endpoints](#43-room-endpoints)
-   - [Room Generation Endpoints](#44-room-generation-endpoints)
-   - [Scheduler Endpoints](#45-scheduler-endpoints)
-5. [BookingService (Port 3001 — configurable)](#5-bookingservice)
-   - [Health Check](#51-health-check)
-   - [Booking Endpoints](#52-booking-endpoints)
-6. [NotificationService (async — no public HTTP endpoints)](#6-notificationservice)
+2. [Gateway & Global Conventions](#2-gateway--global-conventions)
+3. [AuthInGo — Authentication & User APIs](#3-authingo--authentication--user-apis)
+4. [HotelService](#4-hotelservice)
+   - [Health](#41-health)
+   - [Hotel APIs](#42-hotel-apis)
+   - [Room APIs](#43-room-apis)
+   - [Room Generation](#44-room-generation)
+   - [Scheduler](#45-scheduler)
+5. [BookingService](#5-bookingservice)
+   - [Health](#51-health)
+   - [Booking APIs](#52-booking-apis)
+6. [NotificationService](#6-notificationservice)
 7. [Inter-Service Communication](#7-inter-service-communication)
 8. [Data Models](#8-data-models)
 9. [Environment Variables](#9-environment-variables)
+10. [Quick Reference](#10-quick-reference)
 
 ---
 
-## 1. System Overview
+# 1. System Overview
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                       Client Application                    │
-└────────────────────────────┬────────────────────────────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              │                             │
-   ┌──────────▼──────────┐      ┌──────────▼──────────┐
-   │    HotelService     │      │   BookingService    │
-   │    Port: 3001       │◄─────│   Port: 3002       │
-   │  (Sequelize + MySQL)│ HTTP │ Prisma + MySQL/Maria│
-   └─────────────────────┘      └──────────┬──────────┘
-              │                            │
-   ┌──────────▼──────────┐                 │
-   │   Redis + BullMQ    │◄────────────────┘
-   │  (Room Gen Queue)   │
-   └──────────┬──────────┘
-              │ Job Processing
-   ┌──────────▼──────────┐      ┌─────────────────────┐
-   │  RoomGeneration     │      │  NotificationService│
-   │     Worker          │      │  (Mailer Worker)    │
-   └─────────────────────┘      └─────────────────────┘
+```text
+                         Client / API Docs
+                                |
+                                v
+                    +------------------------+
+                    |      AuthInGo Gateway   |
+                    |   JWT + Reverse Proxy  |
+                    +-----------+------------+
+                                |
+                 +--------------+--------------+
+                 |                             |
+                 v                             v
+        +------------------+          +------------------+
+        |   HotelService   |          | BookingService  |
+        | Node + TypeScript|          | Node + TypeScript|
+        | Sequelize + MySQL|          | Prisma + MySQL   |
+        +--------+---------+          +--------+---------+
+                 |                             |
+                 v                             v
+        +------------------+          +------------------+
+        | Redis + BullMQ   |          | Redis + Redlock  |
+        | Room generation  |          | Distributed lock|
+        +--------+---------+          +------------------+
+                 |
+                 v
+        +------------------+
+        | Notification     |
+        | Mailer Worker    |
+        +------------------+
 ```
 
-> \* Each service defaults to port `3001` (overridden via `PORT` env variable).  
-> In a real deployment, separate port values must be set per service.
+### Services
+
+| Service | Responsibility | Default Port |
+|---|---|---:|
+| AuthInGo | Authentication, users, roles, reverse proxy | `8080` |
+| HotelService | Hotels, rooms, room generation, scheduler | `3001` |
+| BookingService | Booking creation and confirmation | `3001` |
+| NotificationService | Async email worker | `3001` |
+
+> Each Node.js service defaults to port `3001`; production deployments must provide separate `PORT` values.
+
+### Production Gateway
+
+```text
+https://airbnb-auth.onrender.com
+```
+
+The gateway currently proxies:
+
+```text
+/HotelService/*   -> https://airbnb-hotel-0job.onrender.com
+/BookingService/* -> https://airbnb-backend-glo7.onrender.com
+```
+
+The gateway CORS configuration currently allows:
+
+```text
+https://airbnb-api-docs-dg88.onrender.com
+```
 
 ---
 
-**Data Stores**
-- **MySQL** — Hotel inventory (Sequelize) · Booking records (Prisma)
-- **Redis** — BullMQ queue state · Redlock distributed locks
+# 2. Gateway & Global Conventions
 
+## Gateway URL
 
-## 2. Global Conventions
+For browser/API-docs requests, use:
 
-### Base URL Pattern
-
-```
-http://<host>:<port>/api/v1
+```text
+https://airbnb-auth.onrender.com
 ```
 
-All currently implemented routes live under `/api/v1`. The `/api/v2` prefix is registered in all services but only exposes a ping health-check endpoint.
+### Service prefixes
 
-### Request Headers
+Hotel APIs:
 
-| Header | Value | Required |
-|---|---|---|
-| `Content-Type` | `application/json` | For all `POST` / `PATCH` requests with a body |
-| `x-correlation-id` | `<uuid-string>` | Automatically injected by the `correlationMiddleware`; clients may supply it for tracing |
+```text
+https://airbnb-auth.onrender.com/HotelService/api/v1/...
+```
 
-### Authentication
+Booking APIs:
 
-> **Note:** The current codebase does **not** implement JWT or session-based authentication middleware. All endpoints are publicly accessible. No `Authorization` header is required at this time.
+```text
+https://airbnb-auth.onrender.com/BookingService/api/v1/...
+```
 
-### Response Envelope
+AuthInGo user/role APIs are registered directly on the gateway:
 
-All success responses share a consistent envelope:
+```text
+https://airbnb-auth.onrender.com/...
+```
+
+## API Versions
+
+Node.js services register:
+
+```text
+/api/v1
+/api/v2
+```
+
+The current v2 routers expose ping endpoints only.
+
+## Request Headers
+
+For JSON requests:
+
+```http
+Content-Type: application/json
+```
+
+For protected AuthInGo endpoints:
+
+```http
+Authorization: Bearer <JWT_TOKEN>
+```
+
+Node.js services also attach/use an `x-correlation-id` for request tracing.
+
+## Authentication
+
+Authentication is implemented by **AuthInGo**.
+
+Protected endpoints use JWT authentication. The JWT middleware expects:
+
+```http
+Authorization: Bearer <JWT_TOKEN>
+```
+
+HotelService and BookingService themselves do not contain JWT middleware in the current source.
+
+## JSON Response Conventions
+
+Node.js services generally use:
 
 ```json
 {
-  "message": "<human-readable description>",
-  "data": { ... },
+  "message": "Operation successful",
+  "data": {},
   "success": true
 }
 ```
 
-### Pagination
-
-No pagination is currently implemented; `GET` collection endpoints return all records.
-
----
-
-## 3. Error Format
-
-All errors are returned by the `genericErrorHandler` middleware with the following shape:
+AuthInGo uses:
 
 ```json
 {
-  "success": false,
-  "error": "<error message string>"
+  "status": "success",
+  "message": "Operation successful",
+  "data": {}
 }
 ```
 
-### Validation Error (400) — from Zod middleware
+> AuthInGo error responses currently use the key `stauts` in the response helper. This is the spelling used by the current implementation.
+
+---
+
+# 3. AuthInGo — Authentication & User APIs
+
+AuthInGo is the Go-based gateway and authentication service.
+
+## 3.1 Health Check
+
+### `GET /ping`
+
+Returns:
 
 ```json
 {
-  "message": "Invalid request body",
-  "success": false,
-  "error": {
-    "issues": [
-      {
-        "code": "invalid_type",
-        "expected": "number",
-        "received": "undefined",
-        "path": ["userId"],
-        "message": "User ID must be present"
-      }
-    ]
+  "status": "success",
+  "message": "Service Health OK! check Completed",
+  "data": "NULL"
+}
+```
+
+Authentication: None.
+
+---
+
+## 3.2 Signup
+
+### `POST /signup`
+
+Creates a user and returns a JWT token.
+
+Authentication: None.
+
+### Request Body
+
+| Field | Type | Required | Constraint |
+|---|---|---|---|
+| `username` | `string` | Yes | Minimum 3 characters |
+| `email` | `string` | Yes | Valid email |
+| `password` | `string` | Yes | Minimum 8 characters |
+
+```json
+{
+  "username": "akash",
+  "email": "akash@example.com",
+  "password": "password123"
+}
+```
+
+### Success
+
+HTTP `200 OK`.
+
+Response uses the AuthInGo success envelope:
+
+```json
+{
+  "status": "success",
+  "message": "User Created Successfully",
+  "data": {
+    "user": {},
+    "jwtToken": "<JWT_TOKEN>"
   }
 }
 ```
 
-### Common HTTP Status Codes
-
-| Code | Meaning | Triggered By |
-|---|---|---|
-| `200` | OK | Successful GET / POST / PATCH operations |
-| `201` | Created | Hotel creation, room fetching (uses `CREATED` code in controller) |
-| `202` | Accepted | Get all hotels |
-| `400` | Bad Request | Zod validation failure; no available rooms; already-finalized idempotency key |
-| `404` | Not Found | Hotel/booking/idempotency key not found |
-| `409` | Conflict | Distributed lock already held (concurrent booking attempt) |
-| `500` | Internal Server Error | Unhandled service/database errors |
-
 ---
 
-## 4. HotelService (Port 3001)
+## 3.3 Login
 
-Entry file: `HotelService/src/server.ts`  
-Router tree:
+### `POST /login`
 
-```
-/api/v1
-  GET   /ping
-  POST  /hotels
-  GET   /hotels/getAllHotels
-  GET   /hotels/:id
-  DELETE /hotels/:id
-  PATCH /hotels
-  POST  /hotels/generateRooms       ← (also at /generateRooms)
-  POST  /generateRooms
-  GET   /rooms/getAvailableRooms
-  POST  /rooms/update-rooms-id
-  POST  /scheduler/start
-  POST  /scheduler/stop
-  GET   /scheduler/status
-  POST  /scheduler/extend
+Authenticates an existing user.
 
-/api/v2
-  GET   /ping
-```
+Authentication: None.
 
----
-
-### 4.1 Health Check
-
-#### `GET /api/v1/ping`
-
-Simple liveness probe.
-
-**Authentication:** None
-
-**Request Headers:** None required
-
-**Request Body:** None
-
-**Success Response — `200 OK`**
+### Request Body
 
 ```json
 {
-  "message": "pong",
-  "success": true
+  "email": "akash@example.com",
+  "password": "password123"
+}
+```
+
+Constraints:
+
+- `email` is required and must be valid.
+- `password` is required and must contain at least 8 characters.
+- Login is protected by the current rate limiter.
+
+### Rate Limit
+
+The current middleware allows up to **5 requests per minute** globally before returning HTTP `429`.
+
+### Success
+
+HTTP `200 OK`.
+
+```json
+{
+  "status": "success",
+  "message": "User Logged In succesfully!",
+  "data": {
+    "user": {},
+    "jwtToken": "<JWT_TOKEN>"
+  }
 }
 ```
 
 ---
 
-### 4.2 Hotel Endpoints
+## 3.4 Get Profile
+
+### `GET /profile`
+
+Authentication:
+
+```http
+Authorization: Bearer <JWT_TOKEN>
+```
+
+The JWT middleware extracts the user ID and email from the token.
+
+### Success
+
+HTTP `200 OK`.
+
+```json
+{
+  "status": "success",
+  "message": "User Fetched Successful",
+  "data": {}
+}
+```
 
 ---
 
-#### `POST /api/v1/hotels`
+## 3.5 Get All Users
 
-Creates a new hotel record.
+### `GET /all`
 
-**Authentication:** None  
-**Validation Middleware:** `validateRequestBody(hotelSchema)`
+Authentication:
 
-**Request Headers:**
-
-```
-Content-Type: application/json
+```http
+Authorization: Bearer <JWT_TOKEN>
 ```
 
-**Request Body:**
+### Success
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `name` | `string` (min 1) | ✅ | Hotel name |
-| `address` | `string` (min 1) | ✅ | Physical address |
-| `location` | `string` (min 1) | ✅ | City / region string |
-| `rating` | `number` (float) | ❌ | Average star rating (0–5) |
-| `ratingCount` | `number` (integer) | ❌ | Number of ratings received |
+HTTP `200 OK`.
+
+```json
+{
+  "status": "success",
+  "message": "All Profile Fetched Successfully!",
+  "data": []
+}
+```
+
+---
+
+## 3.6 Delete User
+
+### `DELETE /`
+
+Authentication:
+
+```http
+Authorization: Bearer <JWT_TOKEN>
+```
+
+### Request Body
+
+```json
+{
+  "id": 1
+}
+```
+
+### Success
+
+HTTP `200 OK`.
+
+```json
+{
+  "status": "success",
+  "message": "User Deleted Successfully!",
+  "data": "nil"
+}
+```
+
+---
+
+## 3.7 Get Role
+
+### `GET /roles/:id`
+
+Authentication: None in the current router.
+
+Example:
+
+```text
+GET /roles/1
+```
+
+---
+
+## 3.8 Get All Roles
+
+### `GET /roles`
+
+Authentication: None.
+
+---
+
+## 3.9 Create Role
+
+### `POST /createRole`
+
+Authentication: None in the current router.
+
+### Request Body
+
+```json
+{
+  "name": "manager",
+  "description": "Hotel management role"
+}
+```
+
+Constraints:
+
+- `name`: minimum 3 characters.
+- `description`: required, maximum 50 characters.
+
+---
+
+## 3.10 Update Role
+
+### `PATCH /roles/:id`
+
+Authentication: None in the current router.
+
+### Request Body
+
+Both fields are optional:
+
+```json
+{
+  "name": "manager",
+  "description": "Updated description"
+}
+```
+
+---
+
+## 3.11 Get Role By Name
+
+### `GET /roleByName`
+
+The current controller reads the role name from a JSON request body despite the route using `GET`.
+
+Expected body:
+
+```json
+{
+  "name": "admin"
+}
+```
+
+> Because GET request bodies are inconsistently handled by clients/proxies, this endpoint should be treated carefully until the backend route is changed to use a query parameter or POST.
+
+---
+
+## 3.12 Get Role Permissions
+
+### `GET /role/:id/permissions`
+
+Example:
+
+```text
+GET /role/1/permissions
+```
+
+---
+
+## 3.13 Assign Permission To Role
+
+### `POST /assignpermissionToRole`
+
+### Request Body
+
+```json
+{
+  "id": 1,
+  "permissionId": 2
+}
+```
+
+---
+
+## 3.14 Remove Permission From Role
+
+### `DELETE /removePermissionFromRole`
+
+### Request Body
+
+```json
+{
+  "id": 1,
+  "permissionId": 2
+}
+```
+
+---
+
+## 3.15 Assign Role To User
+
+### `POST /roles/:userId/assign/:roleId`
+
+This endpoint requires:
+
+```text
+JWT authentication
+admin role
+```
+
+Example:
+
+```text
+POST /roles/7/assign/2
+```
+
+No request body is required.
+
+---
+
+## 3.16 Delete Role
+
+### `DELETE /roles/:id`
+
+Example:
+
+```text
+DELETE /roles/2
+```
+
+---
+
+# 4. HotelService
+
+Base path:
+
+```text
+/api/v1
+```
+
+Through the production gateway:
+
+```text
+https://airbnb-auth.onrender.com/HotelService/api/v1
+```
+
+---
+
+# 4.1 Health
+
+### `GET /ping`
+
+```text
+GET /HotelService/api/v1/ping
+```
+
+The current HotelService controller returns:
+
+```json
+{
+  "message": "pong"
+}
+```
+
+---
+
+# 4.2 Hotel APIs
+
+## Create Hotel
+
+### `POST /hotels`
+
+### Request Body
+
+The active Zod validator requires:
+
+| Field | Type | Required |
+|---|---|---|
+| `name` | `string` | Yes |
+| `address` | `string` | Yes |
+| `location` | `string` | Yes |
+| `price` | `number` | Yes |
+| `roomType` | `string` | Yes |
+| `rating` | `number` | No |
+| `ratingCount` | `number` | No |
+
+Example:
 
 ```json
 {
   "name": "The Grand Horizon",
   "address": "221B Baker Street, London, UK",
   "location": "London",
+  "price": 2500,
+  "roomType": "DELUXE",
   "rating": 4.7,
   "ratingCount": 1240
 }
 ```
 
-**Success Response — `201 Created`**
+### Success
+
+HTTP `201 Created`.
 
 ```json
 {
   "message": "Hotel created Successfully!",
-  "data": {
-    "id": 1,
-    "name": "The Grand Horizon",
-    "address": "221B Baker Street, London, UK",
-    "location": "London",
-    "rating": 4.7,
-    "ratingCount": 1240,
-    "deletedAt": null,
-    "createdAt": "2025-07-15T10:00:00.000Z",
-    "updatedAt": "2025-07-15T10:00:00.000Z"
-  },
+  "data": {},
   "success": true
 }
 ```
 
-**Error Responses:**
-
-| Code | Scenario | Body |
-|---|---|---|
-| `400` | Missing required field or wrong type | `{ "message": "Invalid request body", "success": false, "error": { ... } }` |
-| `500` | Database error | `{ "success": false, "error": "Internal server error" }` |
+> `hostId` exists in the TypeScript DTO, but the active `hotelSchema` does not accept it. The request documentation therefore follows the active validator.
 
 ---
 
-#### `GET /api/v1/hotels/getAllHotels`
+## Get All Hotels
 
-Returns all hotels that have not been soft-deleted (`deletedAt IS NULL`).
+### `GET /hotels/getAllHotels`
 
-**Authentication:** None
+Returns non-deleted hotels.
 
-**Request Headers:** None required
+### Success
 
-**Request Body:** None
-
-**Success Response — `202 Accepted`**
+HTTP `202 Accepted`.
 
 ```json
 {
   "message": "Hotel Detail Found!",
-  "data": [
-    {
-      "id": 1,
-      "name": "The Grand Horizon",
-      "address": "221B Baker Street, London, UK",
-      "location": "London",
-      "rating": 4.7,
-      "ratingCount": 1240,
-      "deletedAt": null,
-      "createdAt": "2025-07-15T10:00:00.000Z",
-      "updatedAt": "2025-07-15T10:00:00.000Z"
-    },
-    {
-      "id": 2,
-      "name": "Seaside Retreat",
-      "address": "42 Ocean Drive, Miami, USA",
-      "location": "Miami",
-      "rating": null,
-      "ratingCount": null,
-      "deletedAt": null,
-      "createdAt": "2025-07-16T08:30:00.000Z",
-      "updatedAt": "2025-07-16T08:30:00.000Z"
-    }
-  ],
+  "data": [],
   "success": true
 }
 ```
 
-**Error Responses:**
-
-| Code | Scenario | Body |
-|---|---|---|
-| `404` | No hotels found in DB | `{ "success": false, "error": "No Hotels found!" }` |
-| `500` | Database error | `{ "success": false, "error": "Internal server error" }` |
-
 ---
 
-#### `GET /api/v1/hotels/:id`
+## Get Hotel By ID
 
-Retrieves a single hotel by its primary key.
+### `GET /hotels/:id`
 
-**Authentication:** None
+Example:
 
-**Path Parameters:**
+```text
+GET /hotels/1
+```
 
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `id` | `number` (integer) | ✅ | Hotel's auto-increment primary key |
+### Success
 
-**Request Body:** None
-
-**Success Response — `200 OK`**
+HTTP `200 OK`.
 
 ```json
 {
   "message": "Hotel found Successfully!",
-  "data": {
-    "id": 1,
-    "name": "The Grand Horizon",
-    "address": "221B Baker Street, London, UK",
-    "location": "London",
-    "rating": 4.7,
-    "ratingCount": 1240,
-    "deletedAt": null,
-    "createdAt": "2025-07-15T10:00:00.000Z",
-    "updatedAt": "2025-07-15T10:00:00.000Z"
-  },
+  "data": {},
   "success": true
 }
 ```
 
-**Error Responses:**
-
-| Code | Scenario | Body |
-|---|---|---|
-| `404` | No hotel with the given ID | `{ "success": false, "error": "Hotel not found" }` |
-| `500` | Database error | `{ "success": false, "error": "Internal server error" }` |
-
 ---
 
-#### `DELETE /api/v1/hotels/:id`
+## Delete Hotel
 
-Soft-deletes a hotel by setting its `deletedAt` timestamp. The record is NOT removed from the database.
+### `DELETE /hotels/:id`
 
-**Authentication:** None
+Soft-deletes the hotel.
 
-**Path Parameters:**
+Example:
 
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `id` | `number` (integer) | ✅ | Hotel's primary key |
+```text
+DELETE /hotels/1
+```
 
-**Request Body:** None
+### Success
 
-**Success Response — `200 OK`**
+HTTP `200 OK`.
 
 ```json
 {
   "message": "Hotel Deleted Successfully",
-  "data": {
-    "id": 1,
-    "name": "The Grand Horizon",
-    "address": "221B Baker Street, London, UK",
-    "location": "London",
-    "rating": 4.7,
-    "ratingCount": 1240,
-    "deletedAt": "2025-07-20T14:22:00.000Z",
-    "createdAt": "2025-07-15T10:00:00.000Z",
-    "updatedAt": "2025-07-20T14:22:00.000Z"
-  },
+  "data": {},
   "success": true
 }
 ```
 
-**Error Responses:**
-
-| Code | Scenario | Body |
-|---|---|---|
-| `404` | Hotel with given ID does not exist | `{ "success": false, "error": "No hotel found!" }` |
-| `500` | Database error | `{ "success": false, "error": "Internal server error" }` |
-
 ---
 
-#### `PATCH /api/v1/hotels`
+## Update Hotel
 
-Updates the `name` of a hotel, identified by its `id` in the request body.
+### `PATCH /hotels/:id`
 
-**Authentication:** None
+> **Updated route:** The current backend uses the hotel ID as a path parameter.
 
-**Request Headers:**
+Example:
 
+```text
+PATCH /HotelService/api/v1/hotels/1
 ```
-Content-Type: application/json
-```
 
-**Request Body:**
+### Request Body
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `id` | `number` (integer) | ✅ | Hotel's primary key |
-| `name` | `string` | ✅ | New name to assign to the hotel |
+The current update DTO supports:
+
+| Field | Type | Required |
+|---|---|---|
+| `name` | `string` | No |
+| `address` | `string` | No |
+| `location` | `string` | No |
+| `price` | `number` | No |
+| `room_type` | `RoomType` | No |
+
+Example:
 
 ```json
 {
-  "id": 1,
-  "name": "The Grand Horizon — Renovated"
+  "name": "The Grand Horizon Renovated",
+  "address": "221B Baker Street, London",
+  "location": "London",
+  "price": 2800,
+  "room_type": "DELUXE"
 }
 ```
 
-**Success Response — `202 Accepted`**
+### Success
+
+HTTP `202 Accepted`.
 
 ```json
 {
   "message": "Hotel Updated Successfully",
-  "data": [1],
+  "data": {},
   "success": true
 }
 ```
 
-> The `data` field is the Sequelize `update()` return value: an array containing the number of affected rows.
+> The update route currently has no Zod validation middleware. The accepted shape is therefore based on `updateHotelDTO` and the service/controller implementation.
 
-**Error Responses:**
+---
 
-| Code | Scenario | Body |
+# 4.3 Room APIs
+
+## Get Available Rooms
+
+### `GET /rooms/getAvailableRooms`
+
+### Query Parameters
+
+| Parameter | Type | Required |
 |---|---|---|
-| `400` | Missing `id` or `name` | `{ "success": false, "error": "<validation message>" }` |
-| `500` | Database error | `{ "success": false, "error": "Internal server error" }` |
+| `roomCategoryId` | `string` | Yes |
+| `checkInDate` | `string` | Yes |
+| `checkOutDate` | `string` | Yes |
 
----
+Example:
 
-### 4.3 Room Endpoints
-
----
-
-#### `GET /api/v1/rooms/getAvailableRooms`
-
-Returns all rooms of a given category that are available (i.e., `bookingId IS NULL`) within the specified date range.
-
-**Authentication:** None  
-**Validation Middleware:** `validateQueryParam(roomSchema)`
-
-**Query Parameters:**
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `roomCategoryId` | `string` → cast to `number` | ✅ | The room category to search within |
-| `checkInDate` | `string` (ISO 8601 date, e.g. `YYYY-MM-DD`) | ✅ | Start of the stay |
-| `checkOutDate` | `string` (ISO 8601 date, e.g. `YYYY-MM-DD`) | ✅ | End of the stay |
-
-**Example Request:**
-
-```
-GET /api/v1/rooms/getAvailableRooms?roomCategoryId=3&checkInDate=2025-08-01&checkOutDate=2025-08-05
+```text
+GET /HotelService/api/v1/rooms/getAvailableRooms?roomCategoryId=3&checkInDate=2026-09-25&checkOutDate=2026-09-30
 ```
 
-**Success Response — `201 Created`**
+### Success
 
-> Note: The controller uses `StatusCodes.CREATED` (201) even for this GET response (implementation quirk).
+HTTP `201 Created`.
 
 ```json
 {
   "message": "Rooms Fetched Successfully!",
-  "data": [
-    {
-      "id": 101,
-      "hotelId": 1,
-      "roomCategoryId": 3,
-      "roomNo": 201,
-      "price": 150.00,
-      "dateOfAvailability": "2025-08-01T00:00:00.000Z",
-      "bookingId": null,
-      "deletedAt": null,
-      "createdAt": "2025-07-01T00:00:00.000Z",
-      "updatedAt": "2025-07-01T00:00:00.000Z"
-    },
-    {
-      "id": 102,
-      "hotelId": 1,
-      "roomCategoryId": 3,
-      "roomNo": 201,
-      "price": 150.00,
-      "dateOfAvailability": "2025-08-02T00:00:00.000Z",
-      "bookingId": null,
-      "deletedAt": null,
-      "createdAt": "2025-07-01T00:00:00.000Z",
-      "updatedAt": "2025-07-01T00:00:00.000Z"
-    }
-  ],
+  "data": [],
   "success": true
 }
 ```
 
-**Error Responses:**
-
-| Code | Scenario | Body |
-|---|---|---|
-| `400` | Missing or wrong-type query parameters | `{ "message": "Invalid request query", "success": false, "error": { ... } }` |
-| `500` | Database error | `{ "success": false, "error": "Internal server error" }` |
+> The controller intentionally returns `201` for this GET endpoint.
 
 ---
 
-#### `POST /api/v1/rooms/update-rooms-id`
+## Update Room Availability
 
-Updates a batch of room records to associate them with a confirmed booking ID. Called internally by BookingService but also accessible directly.
+### `POST /rooms/update-rooms-id`
 
-**Authentication:** None  
-**Validation Middleware:** `validateRequestBody(updateRoomAvailabilitySchema)`
-
-**Request Headers:**
-
-```
-Content-Type: application/json
-```
-
-**Request Body:**
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `bookingId` | `number` (integer) | ✅ | The booking to link the rooms to |
-| `roomIds` | `number[]` | ✅ | Array of room `id`s to mark as booked |
+### Request Body
 
 ```json
 {
@@ -547,7 +790,9 @@ Content-Type: application/json
 }
 ```
 
-**Success Response — `201 Created`**
+### Success
+
+HTTP `201 Created`.
 
 ```json
 {
@@ -557,57 +802,41 @@ Content-Type: application/json
 }
 ```
 
-> `data` is the Sequelize `update()` return value (count of affected rows).
-
-**Error Responses:**
-
-| Code | Scenario | Body |
-|---|---|---|
-| `400` | Missing `bookingId` or `roomIds` | `{ "message": "Invalid request body", "success": false, "error": { ... } }` |
-| `500` | Database error | `{ "success": false, "error": "Internal server error" }` |
-
 ---
 
-### 4.4 Room Generation Endpoints
+# 4.4 Room Generation
 
----
+## Generate Rooms
 
-#### `POST /api/v1/generateRooms`
+### `POST /generateRooms`
 
-Enqueues an asynchronous BullMQ job to generate `Room` records for a specific `RoomCategory` across a date range. Processing happens in a background worker (`roomGeneration.processor.ts`).
+This endpoint queues an asynchronous BullMQ room-generation job.
 
-**Authentication:** None  
-**Validation Middleware:** `validateRequestBody(RoomGenerationJobSchema)`
+### Request Body
 
-**Request Headers:**
+| Field | Type | Required | Default |
+|---|---|---|---|
+| `roomCategoryId` | positive number | Yes | — |
+| `startDate` | ISO datetime | Yes | — |
+| `endDate` | ISO datetime | Yes | — |
+| `priceOverride` | positive number | No | Category price |
+| `batchSize` | positive number | No | `100` |
 
-```
-Content-Type: application/json
-```
-
-**Request Body:**
-
-| Field | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `roomCategoryId` | `number` (positive) | ✅ | — | Target room category ID |
-| `startDate` | `string` (ISO 8601 datetime) | ✅ | — | First date to generate availability for |
-| `endDate` | `string` (ISO 8601 datetime) | ✅ | — | Last date to generate availability for |
-| `priceOverride` | `number` (positive) | ❌ | Category price | Override price per night |
-| `batchSize` | `number` (positive) | ❌ | `100` | Number of records to insert per DB batch |
+Example:
 
 ```json
 {
   "roomCategoryId": 3,
-  "startDate": "2025-09-01T00:00:00.000Z",
-  "endDate": "2025-09-30T23:59:59.000Z",
-  "priceOverride": 175.00,
+  "startDate": "2026-09-25T00:00:00.000Z",
+  "endDate": "2026-09-30T23:59:59.000Z",
+  "priceOverride": 1750,
   "batchSize": 50
 }
 ```
 
-**Success Response — `200 OK`**
+### Success
 
-> The job is enqueued asynchronously; this response confirms the job was accepted, not that rooms have been created.
+HTTP `200 OK`.
 
 ```json
 {
@@ -617,38 +846,31 @@ Content-Type: application/json
 }
 ```
 
-**Error Responses:**
+The response indicates that the job was accepted by the queue; it does not represent completion of room generation.
 
-| Code | Scenario | Body |
-|---|---|---|
-| `400` | Validation failure (negative ID, invalid datetime, etc.) | `{ "message": "Invalid request body", "success": false, "error": { ... } }` |
-| `500` | Redis/BullMQ connection error | `{ "success": false, "error": "Internal server error" }` |
+### Alias
 
----
+The same handler is also registered at:
 
-#### `POST /api/v1/hotels/generateRooms`
+```text
+POST /hotels/generateRooms
+```
 
-Alias of `POST /api/v1/generateRooms` registered under the hotel router. Accepts the same body and returns the same response.
+Both routes currently use `RoomGenerationJobSchema`.
 
-> **Note:** This duplicate route exists because `generateRoomHandler` is imported in both `hotel.router.ts` and `roomGeneration.router.ts`. Prefer `/api/v1/generateRooms` for semantic clarity.
-
----
-
-### 4.5 Scheduler Endpoints
-
-The HotelService runs a `node-cron` scheduler that automatically extends room availability by one day for every room category (default: `0 2 * * *` — 2:00 AM UTC daily). These endpoints manage that scheduler at runtime.
+> `scheduleType` and `scheduledAt` exist in `RoomGenerationRequestSchema`, but the registered HTTP route validates against `RoomGenerationJobSchema`. The active `/generateRooms` API therefore uses the fields documented above.
 
 ---
 
-#### `POST /api/v1/scheduler/start`
+# 4.5 Scheduler
 
-Starts the cron-based room availability extension scheduler. If already running, the request is a no-op (no error thrown).
+## Start Scheduler
 
-**Authentication:** None
+### `POST /scheduler/start`
 
-**Request Body:** None
+No request body.
 
-**Success Response — `200 OK`**
+### Success
 
 ```json
 {
@@ -660,23 +882,15 @@ Starts the cron-based room availability extension scheduler. If already running,
 }
 ```
 
-**Error Responses:**
-
-| Code | Scenario | Body |
-|---|---|---|
-| `500` | Unexpected error starting scheduler | `{ "message": "Failed to start room availability extension scheduler", "success": false, "error": "<message>" }` |
-
 ---
 
-#### `POST /api/v1/scheduler/stop`
+## Stop Scheduler
 
-Stops the running cron scheduler and clears the internal task reference.
+### `POST /scheduler/stop`
 
-**Authentication:** None
+No request body.
 
-**Request Body:** None
-
-**Success Response — `200 OK`**
+### Success
 
 ```json
 {
@@ -688,23 +902,13 @@ Stops the running cron scheduler and clears the internal task reference.
 }
 ```
 
-**Error Responses:**
-
-| Code | Scenario | Body |
-|---|---|---|
-| `500` | Unexpected error stopping scheduler | `{ "message": "Failed to stop room availability extension scheduler", "success": false, "error": "<message>" }` |
-
 ---
 
-#### `GET /api/v1/scheduler/status`
+## Scheduler Status
 
-Returns whether the cron scheduler is currently active.
+### `GET /scheduler/status`
 
-**Authentication:** None
-
-**Request Body:** None
-
-**Success Response — `200 OK`**
+### Success
 
 ```json
 {
@@ -716,27 +920,15 @@ Returns whether the cron scheduler is currently active.
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `isRunning` | `boolean` | `true` if the cron task exists and its status is `"scheduled"` |
-
-**Error Responses:**
-
-| Code | Scenario | Body |
-|---|---|---|
-| `500` | Error reading scheduler state | `{ "message": "Failed to get scheduler status", "success": false, "error": "<message>" }` |
-
 ---
 
-#### `POST /api/v1/scheduler/extend`
+## Manual Availability Extension
 
-Manually triggers the same room availability extension logic that the cron scheduler runs automatically. Useful for backfilling or testing.
+### `POST /scheduler/extend`
 
-**Authentication:** None
+No request body.
 
-**Request Body:** None
-
-**Success Response — `200 OK`**
+### Success
 
 ```json
 {
@@ -748,88 +940,65 @@ Manually triggers the same room availability extension logic that the cron sched
 }
 ```
 
-**Error Responses:**
-
-| Code | Scenario | Body |
-|---|---|---|
-| `500` | DB error during extension | `{ "message": "Failed to perform manual room availability extension", "success": false, "error": "<message>" }` |
-
 ---
 
-## 5. BookingService
+# 5. BookingService
 
-Entry file: `BookingService/src/server.ts`  
-Database ORM: **Prisma** (MySQL / MariaDB)  
-Distributed locking: **Redlock** over Redis
+Base path:
 
-Router tree:
-
-```
+```text
 /api/v1
-  GET   /ping
-  POST  /booking
-  POST  /booking/confirm/:idempotencyKey
-
-/api/v2
-  GET   /ping
 ```
+
+Through the gateway:
+
+```text
+https://airbnb-auth.onrender.com/BookingService/api/v1
+```
+
+The BookingService uses Prisma and Redis Redlock.
 
 ---
 
-### 5.1 Health Check
+# 5.1 Health
 
-#### `GET /api/v1/ping`
+## `GET /ping`
 
-**Authentication:** None  
-**Request Body:** None
+```text
+GET /BookingService/api/v1/ping
+```
 
-**Success Response — `200 OK`**
+Expected:
 
 ```json
 {
-  "message": "pong",
-  "success": true
+  "message": "pong"
 }
 ```
 
 ---
 
-### 5.2 Booking Endpoints
+# 5.2 Booking APIs
 
-#### Two-Phase Booking Flow
+## Create Booking
 
-The BookingService implements a **two-phase commit** pattern to prevent double-booking and ensure data consistency under concurrent load:
+### `POST /booking`
 
-1. **Phase 1 — `POST /booking`:** Acquires a distributed Redlock on the hotel resource, checks availability, creates a `PENDING` booking, generates an idempotency key (UUID v4), and links available rooms to the booking. Returns the `bookingId` and `idempotencyKey`.
-2. **Phase 2 — `POST /booking/confirm/:idempotencyKey`:** Finalises the booking by updating its status from `PENDING` to `CONFIRMED` inside a Prisma DB transaction with a `SELECT ... FOR UPDATE` row lock on the idempotency key.
+Creates a booking in `PENDING` state.
 
----
+### Request Body
 
-#### `POST /api/v1/booking`
+| Field | Type | Required |
+|---|---|---|
+| `userId` | `number` | Yes |
+| `hotelId` | `number` | Yes |
+| `roomCategoryId` | `number` | Yes |
+| `totalGuests` | `number` | Yes, minimum 1 |
+| `bookingAmount` | `number` | Yes, minimum 1 |
+| `checkInDate` | `string` | Yes |
+| `checkOutDate` | `string` | Yes |
 
-Creates a new booking in `PENDING` state, acquires room slots for the requested date range, and returns an idempotency key to use for confirmation.
-
-**Authentication:** None  
-**Validation Middleware:** `validateRequestBody(createBookingSchema)`  
-**Concurrency Control:** Redlock distributed lock on `hotel:<hotelId>` (TTL configured via `LOCK_TTL` env var, default `5000ms`)
-
-**Request Headers:**
-
-```
-Content-Type: application/json
-```
-
-**Request Body:**
-
-| Field | Type | Required | Constraint | Description |
-|---|---|---|---|---|
-| `userId` | `number` | ✅ | Integer | The user creating the booking |
-| `hotelId` | `number` | ✅ | Integer | The hotel to book at |
-| `roomCategoryId` | `number` | ✅ | Integer | The category of room to book |
-| `totalGuests` | `number` | ✅ | ≥ 1 | Number of guests |
-| `bookingAmount` | `number` | ✅ | > 1 | Total cost in base currency |
-| `checkInDate` | `string` | ✅ | ISO 8601 date | Start date of the stay |
-| `checkOutDate` | `string` | ✅ | ISO 8601 date | End date of the stay |
+Example:
 
 ```json
 {
@@ -838,12 +1007,14 @@ Content-Type: application/json
   "roomCategoryId": 3,
   "totalGuests": 2,
   "bookingAmount": 750,
-  "checkInDate": "2025-09-10",
-  "checkOutDate": "2025-09-15"
+  "checkInDate": "2026-09-25",
+  "checkOutDate": "2026-09-30"
 }
 ```
 
-**Success Response — `200 OK`**
+### Success
+
+HTTP `200 OK`.
 
 ```json
 {
@@ -852,38 +1023,25 @@ Content-Type: application/json
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `bookingId` | `number` | The newly-created booking's primary key |
-| `IdempotencyKey` | `string` (UUID v4) | Must be used within the TTL window to confirm the booking |
-
-**Error Responses:**
-
-| Code | Scenario | Body |
-|---|---|---|
-| `400` | Validation failure (missing field, wrong type) | `{ "message": "Invalid request body", "success": false, "error": { ... } }` |
-| `400` | No available rooms for the date range | `{ "success": false, "error": "No rooms available for given dates" }` |
-| `400` | Total nights > available room-day slots | `{ "success": false, "error": "No rooms available for given dates" }` |
-| `500` | Redlock already held (another concurrent booking in progress) | `{ "success": false, "error": "Error already lock acquired by other person." }` |
-| `500` | HotelService unreachable | `{ "success": false, "error": "<axios error message>" }` |
+> Unlike most Node.js service responses, the current booking controller returns this object directly without `message`, `data`, or `success`.
 
 ---
 
-#### `POST /api/v1/booking/confirm/:idempotencyKey`
+## Confirm Booking
 
-Transitions a booking from `PENDING` → `CONFIRMED`. Uses a Prisma interactive transaction with a `SELECT ... FOR UPDATE` row lock to prevent race conditions from duplicate confirmation requests.
+### `POST /booking/confirm/:idempotencyKey`
 
-**Authentication:** None
+Example:
 
-**Path Parameters:**
+```text
+POST /BookingService/api/v1/booking/confirm/b3f2a1c0-4d5e-6f7a-8b9c-0d1e2f3a4b5c
+```
 
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `idempotencyKey` | `string` (UUID v4) | ✅ | The key returned from `POST /api/v1/booking` |
+No request body.
 
-**Request Body:** None
+### Success
 
-**Success Response — `200 OK`**
+HTTP `200 OK`.
 
 ```json
 {
@@ -892,310 +1050,358 @@ Transitions a booking from `PENDING` → `CONFIRMED`. Uses a Prisma interactive 
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `bookingId` | `number` | Confirmed booking's primary key |
-| `status` | `"CONFIRMED"` | Updated booking status |
-
-**Error Responses:**
-
-| Code | Scenario | Body |
-|---|---|---|
-| `400` | Invalid UUID format for `idempotencyKey` | `{ "success": false, "error": "Invalid idempotency key format" }` |
-| `400` | Idempotency key was already finalized (duplicate confirm call) | `{ "success": false, "error": "Idempotency key already finalized" }` |
-| `404` | Idempotency key not found in database | `{ "success": false, "error": "Idempotency key not found" }` |
-| `500` | Database transaction error | `{ "success": false, "error": "Internal server error" }` |
-
 ---
 
-## 6. NotificationService
+## Get All Bookings For User
 
-> **The NotificationService does not expose public-facing HTTP API endpoints.**
+### `GET /booking/getAllBookings/:id`
 
-It is a **background worker service** that consumes email jobs from a BullMQ queue (backed by Redis) and sends transactional emails using Nodemailer + Handlebars templates.
+This endpoint is present in the current backend and was added to the documentation.
 
-### Architecture
+Example:
 
-```
-BookingService ──► Redis BullMQ Queue (mailer-queue)
-                                │
-                   NotificationService Worker
-                                │
-                       renderMailTemplate()   ← Handlebars (.hbs)
-                                │
-                         Nodemailer sendMail()
-                                │
-                        SMTP Server (Gmail / custom)
+```text
+GET /BookingService/api/v1/booking/getAllBookings/7
 ```
 
-### Queue Job Schema (`NotificationDto`)
+Here `id` is passed to `getAllBookingsService()` as a number.
 
-Jobs are added to the queue using `addEmailToQueue()`. The payload conforms to the following interface:
+### Success
 
-```typescript
-interface NotificationDto {
-  to: string;          // Recipient email address
-  subject: string;     // Email subject line
-  templateId: string;  // Handlebars template identifier (e.g., "welcome")
-  params: Record<string, any>;  // Template variable substitutions
+HTTP `200 OK`.
+
+```json
+{
+  "message": "Booking fetched successfully!",
+  "data": []
 }
 ```
 
-**Example Job Payload:**
+---
+
+# 6. NotificationService
+
+NotificationService is primarily a background worker.
+
+It does not expose a public notification HTTP API.
+
+## Health
+
+The service registers:
+
+```text
+GET /api/v1/ping
+GET /api/v2/ping
+```
+
+The v1 router currently imports the v2 ping router internally, so both registrations should be treated according to the current source rather than assumed to represent separate functionality.
+
+## Email Queue Payload
+
+The worker consumes a `NotificationDto`:
+
+```typescript
+interface NotificationDto {
+  to: string;
+  subject: string;
+  templateId: string;
+  params: Record<string, any>;
+}
+```
+
+Example:
 
 ```json
 {
   "to": "guest@example.com",
-  "subject": "Your Booking Confirmation — The Grand Horizon",
+  "subject": "Your Booking Confirmation",
   "templateId": "welcome",
   "params": {
-    "name": "Alex",
+    "name": "Akash",
     "appName": "Booking App"
   }
 }
 ```
 
-### Worker Behaviour
+The worker uses BullMQ/Redis and Nodemailer.
 
-| Event | Action |
+---
+
+# 7. Inter-Service Communication
+
+## BookingService → HotelService
+
+BookingService communicates with HotelService using Axios.
+
+### Get Available Rooms
+
+```http
+GET /api/v1/rooms/getAvailableRooms
+```
+
+Query:
+
+```text
+roomCategoryId
+checkInDate
+checkOutDate
+```
+
+### Update Room Availability
+
+```http
+POST /api/v1/rooms/update-rooms-id
+```
+
+Body:
+
+```json
+{
+  "bookingId": 42,
+  "roomIds": [101, 102]
+}
+```
+
+## Booking Flow
+
+```text
+Client
+  |
+  | POST /booking
+  v
+BookingService
+  |
+  | acquire Redis Redlock
+  |
+  | GET available rooms
+  v
+HotelService
+  |
+  | return available rooms
+  v
+BookingService
+  |
+  | create PENDING booking
+  | create idempotency key
+  | update room booking IDs
+  |
+  v
+Client
+  |
+  | bookingId + IdempotencyKey
+  |
+  | POST /booking/confirm/:idempotencyKey
+  v
+BookingService
+  |
+  | PENDING -> CONFIRMED
+  v
+Client
+```
+
+---
+
+# 8. Data Models
+
+## HotelService — Hotel
+
+The active hotel creation validator requires:
+
+```text
+name
+address
+location
+price
+roomType
+```
+
+Optional:
+
+```text
+rating
+ratingCount
+```
+
+## Room Category
+
+```text
+hotelId
+roomType
+roomNo
+price
+```
+
+### RoomType
+
+```text
+SINGLE
+DOUBLE
+FAMILY
+DELUXE
+SUITE
+```
+
+## Room
+
+```text
+id
+hotelId
+roomCategoryId
+roomNo
+price
+dateOfAvailability
+bookingId
+createdAt
+updatedAt
+deletedAt
+```
+
+## Booking
+
+```text
+id
+userId
+hotelId
+checkInDate
+checkOutDate
+roomCategoryId
+bookingAmount
+totalGuests
+status
+createdAt
+updatedAt
+```
+
+### BookingStatus
+
+```text
+PENDING
+CONFIRMED
+CANCELLED
+```
+
+## IdempotencyKey
+
+```text
+id
+idemKey
+bookingId
+finalized
+createdAt
+updatedAt
+```
+
+---
+
+# 9. Environment Variables
+
+## HotelService
+
+| Variable | Default |
 |---|---|
-| Job received with name `"payload:mail"` | Render Handlebars template → send via Nodemailer |
-| Job name mismatch | Throw `Error("Invalid job name")` → job marked as failed |
-| Nodemailer error | Throw `InternalServerError` → job retried per BullMQ policy |
-| `completed` | Log success |
-| `failed` | Log failure: `"Email processing failed!"` |
+| `PORT` | `3001` |
+| `REDIS_PORT` | `6379` |
+| `REDIS_HOST` | `localhost` |
+| `ROOM_CRON` | `0 2 * * *` |
+| `DB_HOST` | `localhost` |
+| `DB_USER` | `root` |
+| `DB_PASSWORD` | `root` |
+| `DB_NAME` | `test_db` |
+| `DB_PORT` | `10337` |
 
-### Health Check
+## BookingService
 
-The v1 and v2 ping routes are registered (same as the other services):
-
-```
-GET /api/v1/ping   →  { "message": "pong", "success": true }
-GET /api/v2/ping   →  { "message": "pong", "success": true }
-```
-
----
-
-## 7. Inter-Service Communication
-
-BookingService calls HotelService synchronously over HTTP using **Axios**:
-
-| Call | Method | HotelService Endpoint | Purpose |
-|---|---|---|---|
-| `getAvailableRooms()` | `GET` | `/api/v1/rooms/getAvailableRooms` | Check room availability before creating a booking |
-| `updateRoomAvailability()` | `POST` | `/api/v1/rooms/update-rooms-id` | Associate booked room IDs with the new booking ID |
-
-BookingService base URL for HotelService is configured via `HOTEL_SERVICE_URL` env variable (default: `http://localhost:3002`).
-
-**Sequence Diagram — Create Booking:**
-
-```
-Client          BookingService           HotelService         Redis (Redlock)
-  │                   │                       │                      │
-  │  POST /booking    │                       │                      │
-  │──────────────────►│                       │                      │
-  │                   │  acquire lock on      │                      │
-  │                   │  hotel:<hotelId>      │                      │
-  │                   │─────────────────────────────────────────────►│
-  │                   │  lock acquired        │                      │
-  │                   │◄─────────────────────────────────────────────│
-  │                   │  GET /rooms/          │                      │
-  │                   │  getAvailableRooms    │                      │
-  │                   │──────────────────────►│                      │
-  │                   │  [room list]          │                      │
-  │                   │◄──────────────────────│                      │
-  │                   │  createBooking (DB)   │                      │
-  │                   │  createIdempotency    │                      │
-  │                   │  POST /rooms/         │                      │
-  │                   │  update-rooms-id      │                      │
-  │                   │──────────────────────►│                      │
-  │                   │  rooms updated        │                      │
-  │                   │◄──────────────────────│                      │
-  │  { bookingId,     │                       │                      │
-  │    idempotencyKey}│                       │                      │
-  │◄──────────────────│                       │                      │
-```
-
----
-
-## 8. Data Models
-
-### HotelService — Sequelize / MySQL
-
-#### `hotels` Table
-
-| Column | SQL Type | Nullable | Default | Notes |
-|---|---|---|---|---|
-| `id` | `INTEGER` | No | auto-increment | Primary key |
-| `name` | `VARCHAR` | No | — | Hotel display name |
-| `address` | `VARCHAR` | No | — | Physical address |
-| `location` | `VARCHAR` | No | — | City or region |
-| `rating` | `FLOAT` | Yes | `NULL` | Average guest rating |
-| `rating_count` | `INTEGER` | Yes | `NULL` | Total ratings count |
-| `created_at` | `DATETIME` | Yes | `NOW()` | Auto-managed |
-| `updated_at` | `DATETIME` | Yes | `NOW()` | Auto-managed |
-| `deleted_at` | `DATETIME` | Yes | `NULL` | Soft-delete timestamp |
-
-#### `room_categories` Table
-
-| Column | SQL Type | Nullable | Default | Notes |
-|---|---|---|---|---|
-| `id` | `INTEGER` | No | auto-increment | Primary key |
-| `hotel_id` | `INTEGER` | No | — | FK → `hotels.id` |
-| `room_type` | `ENUM` | Yes | — | `SINGLE`, `DOUBLE`, `FAMILY`, `DELUXE`, `SUITE` |
-| `room_no` | `INTEGER` | No | — | Room number |
-| `price` | `INTEGER` | No | — | Base price per night |
-| `created_at` | `DATETIME` | Yes | — | Auto-managed |
-| `updated_at` | `DATETIME` | Yes | — | Auto-managed |
-| `deleted_at` | `DATETIME` | Yes | `NULL` | Soft-delete timestamp |
-
-#### `rooms` Table
-
-| Column | SQL Type | Nullable | Default | Notes |
-|---|---|---|---|---|
-| `id` | `INTEGER` | No | auto-increment | Primary key |
-| `hotel_id` | `INTEGER` | No | — | FK → `hotels.id` (CASCADE) |
-| `room_category_id` | `INTEGER` | No | — | FK → `room_categories.id` |
-| `room_no` | `INTEGER` | No | — | Room number |
-| `price` | `FLOAT` | No | — | Price for this specific slot |
-| `date_of_availability` | `DATETIME` | No | — | The calendar date this slot represents |
-| `booking_id` | `INTEGER` | Yes | `NULL` | FK → Booking (set when booked) |
-| `created_at` | `DATETIME` | Yes | — | Auto-managed |
-| `updated_at` | `DATETIME` | Yes | — | Auto-managed |
-| `deleted_at` | `DATETIME` | Yes | `NULL` | Soft-delete timestamp |
-
----
-
-### BookingService — Prisma / MySQL
-
-#### `Booking` Table (Prisma Model)
-
-| Column | Type | Nullable | Default | Notes |
-|---|---|---|---|---|
-| `id` | `Int` | No | auto-increment | Primary key |
-| `userId` | `Int` | No | — | Application user identifier |
-| `hotelId` | `Int` | No | — | References HotelService hotel |
-| `checkInDate` | `DateTime` | No | — | |
-| `checkOutDate` | `DateTime` | No | — | |
-| `roomCategoryId` | `Int` | No | — | References HotelService room category |
-| `bookingAmount` | `Int` | No | — | Total cost |
-| `totalGuests` | `Int` | No | — | Guest count |
-| `status` | `BookingStatus` | No | `PENDING` | `PENDING` → `CONFIRMED` → `CANCELLED` |
-| `createdAt` | `DateTime` | No | `now()` | |
-| `updatedAt` | `DateTime` | No | auto-update | |
-
-**BookingStatus enum values:** `PENDING` · `CONFIRMED` · `CANCELLED`
-
-#### `IdempotencyKey` Table (Prisma Model)
-
-| Column | Type | Nullable | Default | Notes |
-|---|---|---|---|---|
-| `id` | `Int` | No | auto-increment | Primary key |
-| `idemKey` | `String` | No | — | UUID v4, unique |
-| `bookingId` | `Int` | No | — | FK → `Booking.id`, unique (1:1) |
-| `finalized` | `Boolean` | No | `false` | Set to `true` after confirm |
-| `createdAt` | `DateTime` | No | `now()` | |
-| `updatedAt` | `DateTime` | No | auto-update | |
-
----
-
-## 9. Environment Variables
-
-### HotelService
-
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `3001` | HTTP server port |
-| `REDIS_PORT` | `6379` | Redis port |
-| `REDIS_HOST` | `localhost` | Redis hostname |
-| `ROOM_CRON` | `0 2 * * *` | Cron expression for the room availability extension job |
-| `DB_HOST` | `localhost` | MySQL host |
-| `DB_USER` | `root` | MySQL username |
-| `DB_PASSWORD` | `root` | MySQL password |
-| `DB_NAME` | `test_db` | MySQL database name |
-
-### BookingService
-
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `3001` | HTTP server port |
-| `REDIS_SERVER_URL` | `redis://localhost:6379` | Full Redis connection URL (used by Redlock) |
-| `LOCK_TTL` | `5000` | Distributed lock time-to-live in milliseconds |
-| `HOTEL_SERVICE_URL` | `http://localhost:3002` | Base URL for HotelService HTTP calls |
-| `DATABASE_URL` | — | Prisma connection string (MySQL/MariaDB format) |
-
-### NotificationService
-
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `3001` | HTTP server port |
-| `REDIS_PORT` | `6379` | Redis port |
-| `REDIS_HOST` | `localhost` | Redis hostname |
-| `MAIL_USER` | `""` | SMTP sender email address |
-| `MAIL_PASS` | `""` | SMTP sender password / app password |
-
----
-
-## Appendix A — RoomType Enum Values
-
-| Value | Description |
+| Variable | Default |
 |---|---|
-| `SINGLE` | Single occupancy room |
-| `DOUBLE` | Double occupancy room |
-| `FAMILY` | Family room |
-| `DELUXE` | Deluxe room |
-| `SUITE` | Suite |
+| `PORT` | `3001` |
+| `REDIS_SERVER_URL` | `redis://localhost:6379` |
+| `LOCK_TTL` | `5000` |
+| `HOTEL_SERVICE_URL` | `http://localhost:3002` |
+| `DATABASE_URL` | — |
 
----
+## NotificationService
 
-## Appendix B — BookingStatus State Machine
+| Variable | Default |
+|---|---|
+| `PORT` | `3001` |
+| `REDIS_PORT` | `6379` |
+| `REDIS_HOST` | `localhost` |
+| `MAIL_USER` | empty |
+| `MAIL_PASS` | empty |
 
+## AuthInGo
+
+The current Go service reads environment configuration including:
+
+```text
+PORT
+JWT_SECRET
 ```
-  ┌──────────┐   POST /booking/confirm/:key   ┌───────────┐
-  │ PENDING  │──────────────────────────────►│ CONFIRMED │
-  └──────────┘                               └───────────┘
-       │                                          │
-       │  (manual cancellation — not yet          │
-       │   exposed via HTTP endpoint)             │
-       ▼                                          ▼
-  ┌───────────┐                            ┌───────────┐
-  │ CANCELLED │                            │ CANCELLED │
-  └───────────┘                            └───────────┘
-```
 
-> **Note:** The `cancelBooking` function is implemented in `booking.repository.ts` but no HTTP route for cancellation is currently registered. It is a candidate for a future endpoint.
+Database and other configuration values are loaded through the AuthInGo config packages.
 
 ---
 
-## Appendix C — Quick Reference
+# 10. Quick Reference
 
-### HotelService Endpoints
+## AuthInGo
 
-| Method | Path | Description |
+| Method | Path | Auth |
 |---|---|---|
-| `GET` | `/api/v1/ping` | Health check |
-| `POST` | `/api/v1/hotels` | Create a hotel |
-| `GET` | `/api/v1/hotels/getAllHotels` | List all non-deleted hotels |
-| `GET` | `/api/v1/hotels/:id` | Get hotel by ID |
-| `DELETE` | `/api/v1/hotels/:id` | Soft-delete hotel |
-| `PATCH` | `/api/v1/hotels` | Update hotel name |
-| `POST` | `/api/v1/generateRooms` | Enqueue room generation job |
-| `POST` | `/api/v1/hotels/generateRooms` | Alias of above |
-| `GET` | `/api/v1/rooms/getAvailableRooms` | Query available rooms by date range |
-| `POST` | `/api/v1/rooms/update-rooms-id` | Link rooms to a booking |
-| `POST` | `/api/v1/scheduler/start` | Start availability cron |
-| `POST` | `/api/v1/scheduler/stop` | Stop availability cron |
-| `GET` | `/api/v1/scheduler/status` | Get cron status |
-| `POST` | `/api/v1/scheduler/extend` | Manually extend room availability |
+| GET | `/ping` | Public |
+| POST | `/signup` | Public |
+| POST | `/login` | Public |
+| GET | `/profile` | JWT |
+| GET | `/all` | JWT |
+| DELETE | `/` | JWT |
+| GET | `/roles/:id` | Public |
+| GET | `/roles` | Public |
+| POST | `/createRole` | Public |
+| PATCH | `/roles/:id` | Public |
+| GET | `/roleByName` | Public |
+| GET | `/role/:id/permissions` | Public |
+| POST | `/assignpermissionToRole` | Public |
+| DELETE | `/removePermissionFromRole` | Public |
+| POST | `/roles/:userId/assign/:roleId` | JWT + admin |
+| DELETE | `/roles/:id` | Public |
 
-### BookingService Endpoints
+## HotelService
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/v1/ping` | Health check |
-| `POST` | `/api/v1/booking` | Create a pending booking |
-| `POST` | `/api/v1/booking/confirm/:idempotencyKey` | Confirm a pending booking |
+| Method | Path |
+|---|---|
+| GET | `/api/v1/ping` |
+| POST | `/api/v1/hotels` |
+| GET | `/api/v1/hotels/getAllHotels` |
+| GET | `/api/v1/hotels/:id` |
+| DELETE | `/api/v1/hotels/:id` |
+| PATCH | `/api/v1/hotels/:id` |
+| POST | `/api/v1/generateRooms` |
+| POST | `/api/v1/hotels/generateRooms` |
+| GET | `/api/v1/rooms/getAvailableRooms` |
+| POST | `/api/v1/rooms/update-rooms-id` |
+| POST | `/api/v1/scheduler/start` |
+| POST | `/api/v1/scheduler/stop` |
+| GET | `/api/v1/scheduler/status` |
+| POST | `/api/v1/scheduler/extend` |
+
+## BookingService
+
+| Method | Path |
+|---|---|
+| GET | `/api/v1/ping` |
+| POST | `/api/v1/booking` |
+| POST | `/api/v1/booking/confirm/:idempotencyKey` |
+| GET | `/api/v1/booking/getAllBookings/:id` |
+
+## NotificationService
+
+| Method | Path |
+|---|---|
+| GET | `/api/v1/ping` |
+| GET | `/api/v2/ping` |
 
 ---
 
-*Documentation generated by codebase analysis — September 2026*
+> **Important:** This document reflects the backend source supplied with the current project snapshot. Where DTOs, validators, and controllers disagree, the documentation identifies the active validator/route behavior instead of silently treating the DTO as the API contract.
+
+*Updated from the September 2026 Airbnb backend codebase.*

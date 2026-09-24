@@ -1,37 +1,138 @@
 # 🏠 Airbnb Backend — Microservices Architecture
 
-> **A production-grade, cloud-ready booking platform** built with a decoupled microservices pattern — handling hotel inventory, reservations, and asynchronous email notifications at scale.
+> **A production-grade, cloud-ready booking platform** built with a decoupled microservices architecture for authentication, hotel inventory, reservations, and asynchronous notifications.
 
+[![Go](https://img.shields.io/badge/Go-1.x-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Express](https://img.shields.io/badge/Express.js-4.x-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com/)
 [![MySQL](https://img.shields.io/badge/MySQL-Latest-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://www.mysql.com/)
-[![Redis](https://img.shields.io/badge/Redis-Queue%20%26%20Cache-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
+[![Redis](https://img.shields.io/badge/Redis-Queue%20%26%20Locks-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 [![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?style=for-the-badge&logo=prisma&logoColor=white)](https://www.prisma.io/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
 ---
 
-## API Documentation
-See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for the full reference.
+## 📚 API Documentation
+
+- **Live API Documentation:** https://airbnb-api-docs-dg88.onrender.com/
+- **Full API Reference:** [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
+
+The API documentation contains endpoint details, authentication requirements, request/response examples, validation rules, service routes, and environment configuration.
+
+---
 
 ## 📖 Overview
 
-This project is a **scalable backend system** for a property-rental platform inspired by Airbnb, architected as independent microservices rather than a monolith. It is designed for backend engineers and hiring teams who want to see real-world patterns: service decomposition, asynchronous inter-service communication via message queues, and type-safe API design with TypeScript. The platform solves the core challenge of keeping booking reliability, hotel data management, and user notifications loosely coupled and independently deployable.
+This project is a **microservices-based backend system** for a property-rental platform inspired by Airbnb.
+
+The backend is divided into independently deployable services:
+
+- **AuthInGo** — Go-based authentication, authorization, JWT handling, role management, CORS, rate limiting, and API gateway/proxy.
+- **HotelService** — Hotel inventory, room availability, room generation, and scheduler management.
+- **BookingService** — Booking creation and confirmation with Redis-based distributed locking.
+- **NotificationService** — Asynchronous email processing using Redis/BullMQ.
+
+The architecture separates responsibilities so each service can evolve and scale independently.
 
 ---
 
 ## ✨ Key Features
 
-- **Microservices Architecture** — Three independently deployable services (`HotelService`, `BookingService`, `NotificationService`), each with its own responsibility and data store.
-- **Asynchronous Job Queue** — Booking confirmations trigger email jobs via a **Bull Queue** (backed by Redis), ensuring the HTTP response is never blocked by notification delivery.
-- **Type-Safe API Layer** — Full **TypeScript** across all services eliminates a class of runtime bugs and enables safe refactoring at scale.
-- **Prisma ORM with MYSQL** — Strongly-typed database access with auto-generated migrations, eliminating raw SQL injection risk and accelerating schema evolution.
-- **Decoupled Notification Service** — The `NotificationService` consumes queue jobs independently, making it trivially swappable (e.g., swap email for SMS) with zero impact on booking logic.
-- **Docker Compose Orchestration** — Single-command local setup spins up all services, databases, and Redis with correct networking and environment injection.
-- **Room Availability Management** — Stateful reservation tracking prevents double-booking by validating room availability before confirming reservations.
-- **RESTful API Design** — Clean, versioned REST endpoints with consistent request/response contracts across all services.
+- **Microservices Architecture** — Authentication, hotel management, booking, and notification responsibilities are separated into independent services.
+- **API Gateway** — AuthInGo acts as the public gateway and proxies requests to HotelService and BookingService.
+- **JWT Authentication** — Protected endpoints use `Authorization: Bearer <JWT_TOKEN>`.
+- **Role-Based Authorization** — Administrative operations are protected using role-based middleware.
+- **Rate Limiting** — Login requests are protected by a Redis-backed rate limiter.
+- **Hotel & Room Management** — Supports hotel CRUD, room availability checks, room ID updates, and bulk room generation.
+- **Booking Workflow** — Booking creation and confirmation are separated using an idempotency key.
+- **Distributed Locking** — BookingService uses Redis/Redlock to reduce concurrent booking conflicts.
+- **Asynchronous Notifications** — NotificationService processes email jobs independently of the main request flow.
+- **Redis Integration** — Used for rate limiting, distributed locks, queues, and background processing.
+- **Validation** — Request DTOs and validators protect API contracts.
+- **Docker Support** — Services and infrastructure can be run locally using Docker Compose.
+- **REST APIs** — Versioned APIs are exposed through `/api/v1` and `/api/v2` where applicable.
+
+---
+
+## 🏛️ System Architecture
+
+```text
+                         ┌──────────────────────────┐
+                         │      Client / Frontend    │
+                         └─────────────┬────────────┘
+                                       │
+                                       ▼
+                         ┌──────────────────────────┐
+                         │       AuthInGo Gateway    │
+                         │       Go + Chi Router     │
+                         │  JWT / CORS / Rate Limit │
+                         └─────────────┬────────────┘
+                                       │
+                       ┌───────────────┴────────────────┐
+                       │                                │
+                       ▼                                ▼
+             ┌───────────────────┐            ┌───────────────────┐
+             │    HotelService   │            │   BookingService  │
+             │ Node + TypeScript │◄───────────│ Node + TypeScript │
+             │ Sequelize + MySQL │    HTTP    │ Prisma + MySQL    │
+             └─────────┬─────────┘            └─────────┬─────────┘
+                       │                                │
+                       │                                │
+                       ▼                                ▼
+             ┌───────────────────┐            ┌───────────────────┐
+             │ Redis + BullMQ    │            │ Redis + Redlock   │
+             │ Room Generation   │            │ Distributed Locks │
+             └─────────┬─────────┘            └─────────┬─────────┘
+                       │                                │
+                       └───────────────┬────────────────┘
+                                       ▼
+                         ┌──────────────────────────┐
+                         │   NotificationService   │
+                         │ Async Mail Worker       │
+                         │ Redis + BullMQ + SMTP    │
+                         └──────────────────────────┘
+```
+
+### Data Stores
+
+| Component | Responsibility |
+|---|---|
+| MySQL | Hotel inventory and booking data |
+| Redis | Rate limiting, distributed locks, queues, background jobs |
+| Sequelize | HotelService database access |
+| Prisma | BookingService database access |
+
+### Request Flow
+
+1. The client sends authentication or API requests to **AuthInGo**.
+2. AuthInGo validates authentication/authorization requirements where applicable.
+3. Hotel requests are proxied to **HotelService**.
+4. Booking requests are proxied to **BookingService**.
+5. BookingService communicates with HotelService to validate/update room availability.
+6. Redis/Redlock protects critical booking operations from concurrent conflicts.
+7. Notification jobs are processed asynchronously by **NotificationService**.
+
+---
+
+## 🌐 Production Services
+
+| Service | Production URL |
+|---|---|
+| AuthInGo Gateway | `https://airbnb-auth.onrender.com` |
+| HotelService | `https://airbnb-hotel-0job.onrender.com` |
+| BookingService | `https://airbnb-backend-glo7.onrender.com` |
+| API Documentation | `https://airbnb-api-docs-dg88.onrender.com` |
+
+### Gateway Proxy Routes
+
+```text
+https://airbnb-auth.onrender.com/HotelService/*
+        └──► HotelService
+
+https://airbnb-auth.onrender.com/BookingService/*
+        └──► BookingService
+```
 
 ---
 
@@ -39,55 +140,64 @@ This project is a **scalable backend system** for a property-rental platform ins
 
 | Category | Technology |
 |---|---|
-| **Runtime** | Node.js 18+ |
-| **Language** | TypeScript 5.x |
-| **Framework** | Express.js |
-| **ORM** | Prisma 7 |
-| **Primary Database** | MYSQL |
-| **Cache / Queue Store** | Redis |
-| **Job Queue** | Bull (BullMQ) |
-| **Containerization** | Docker & Docker Compose |
-| **Package Manager** | npm |
-| **Dev Tooling** | ts-node, nodemon, ESLint |
+| Authentication / Gateway | Go, Chi Router |
+| Runtime | Node.js 18+ |
+| Language | TypeScript 5.x |
+| Backend Framework | Express.js |
+| Hotel ORM | Sequelize |
+| Booking ORM | Prisma |
+| Primary Database | MySQL |
+| Cache / Lock / Queue Store | Redis |
+| Background Jobs | BullMQ |
+| Distributed Lock | Redlock |
+| Authentication | JWT |
+| Validation | DTOs / Validators |
+| Containerization | Docker & Docker Compose |
+| Package Manager | npm |
+| Development Tools | ts-node, nodemon, ESLint |
 
 ---
 
-## 🏛️ System Architecture
+## 📁 Project Structure
 
-The system follows an **event-driven microservices** pattern. Each service owns its domain completely and communicates asynchronously through a shared Redis-backed Bull Queue.
-
+```text
+Airbnb-backend/
+│
+├── AuthInGo/
+│   ├── controllers/
+│   ├── dto/
+│   ├── middlewares/
+│   ├── router/
+│   ├── services/
+│   └── utils/
+│
+├── HotelService/
+│   ├── src/
+│   │   ├── controllers/
+│   │   ├── routers/
+│   │   ├── services/
+│   │   ├── validators/
+│   │   └── ...
+│   └── ...
+│
+├── BookingService/
+│   ├── src/
+│   │   ├── controllers/
+│   │   ├── routers/
+│   │   ├── services/
+│   │   ├── validators/
+│   │   └── ...
+│   ├── prisma/
+│   └── ...
+│
+├── NotificationService/
+│   ├── src/
+│   └── ...
+│
+├── docker-compose.yml
+├── API_DOCUMENTATION.md
+└── README.md
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                       Client Application                    │
-└────────────────────────────┬────────────────────────────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              │                             │
-   ┌──────────▼──────────┐      ┌──────────▼──────────┐
-   │    HotelService     │      │   BookingService    │
-   │    Port: 3001       │◄─────│   Port: 3002       │
-   │  (Sequelize + MySQL)│ HTTP │ Prisma + MySQL/Maria│
-   └─────────────────────┘      └──────────┬──────────┘
-              │                            │
-   ┌──────────▼──────────┐                 │
-   │   Redis + BullMQ    │◄────────────────┘
-   │  (Room Gen Queue)   │
-   └──────────┬──────────┘
-              │ Job Processing
-   ┌──────────▼──────────┐      ┌─────────────────────┐
-   │  RoomGeneration     │      │  NotificationService│
-   │     Worker          │      │  (Mailer Worker)    │
-   └─────────────────────┘      └─────────────────────┘
-```
-
-**Data Stores**
-- **MySQL** — Hotel inventory (Sequelize) · Booking records (Prisma)
-- **Redis** — BullMQ queue state · Redlock distributed locks
-
-**Flow summary:**
-1. The client queries `HotelService` to browse available properties.
-2. On booking, `BookingService` validates room availability, persists the reservation in MYSQL, then enqueues a notification job in Redis.
-3. `NotificationService` picks up the job asynchronously and dispatches the confirmation email — completely decoupled from the HTTP response cycle.
 
 ---
 
@@ -95,11 +205,14 @@ The system follows an **event-driven microservices** pattern. Each service owns 
 
 ### Prerequisites
 
-Ensure the following are installed on your machine:
+Install:
 
+- [Go](https://go.dev/)
 - [Node.js](https://nodejs.org/) v18+
 - [Docker](https://www.docker.com/) & Docker Compose
 - [Git](https://git-scm.com/)
+- MySQL
+- Redis
 
 ### 1. Clone the Repository
 
@@ -110,150 +223,424 @@ cd Airbnb-backend
 
 ### 2. Configure Environment Variables
 
-Each service requires its own `.env` file. Use the templates below.
+Each service has its own configuration.
 
-**`HotelService/.env`**
+#### AuthInGo
+
+```env
+PORT=8080
+JWT_SECRET=your_jwt_secret
+```
+
+Use the environment variables defined by the AuthInGo configuration for database and Redis connectivity.
+
+#### HotelService
+
+Typical local configuration:
+
 ```env
 PORT=3001
 DB_HOST=localhost
 DB_USER=root
-DB_PASSWORD=your_password
-DB_NAME=airbnb_hotels
+DB_PASSWORD=root
+DB_NAME=test_db
+DB_PORT=10337
+
 REDIS_HOST=localhost
 REDIS_PORT=6379
+
 ROOM_CRON=0 2 * * *
 ```
 
-**`BookingService/.env`**
+#### BookingService
+
 ```env
-PORT=3002
-DATABASE_URL="mysql://USER:PASSWORD@localhost:3306/airbnb_bookings"
+PORT=3001
+DATABASE_URL="mysql://USER:PASSWORD@localhost:3306/DATABASE"
+
 REDIS_SERVER_URL=redis://localhost:6379
 LOCK_TTL=5000
-HOTEL_SERVICE_URL=http://localhost:3001
+HOTEL_SERVICE_URL=http://localhost:3002
 ```
 
-**`NotificationService/.env`**
+#### NotificationService
+
 ```env
-PORT=3003
+PORT=3001
+
 REDIS_HOST=localhost
 REDIS_PORT=6379
+
 MAIL_USER=your_email@gmail.com
 MAIL_PASS=your_app_password
 ```
 
-### 3. Install Dependencies (per service)
-
-```bash
-# Install for each service
-cd BookingService && npm install && cd ..
-cd HotelService && npm install && cd ..
-cd NotificationService && npm install && cd ..
-```
-
-### 4. Run Database Migrations
-
-```bash
-# Run Prisma migrations for services that use MYSQL
-cd BookingService
-npx prisma migrate dev --name init
-cd ../HotelService
-npx prisma migrate dev --name init
-```
-
-### 5. Start with Docker Compose (Recommended)
-
-```bash
-# From the repo root — spins up all services, MYSQL, and Redis
-docker-compose up --build
-```
-
-### 6. Start Services Individually (Development)
-
-```bash
-# Terminal 1 — Hotel Service
-cd HotelService && npm run dev
-
-# Terminal 2 — Booking Service
-cd BookingService && npm run dev
-
-# Terminal 3 — Notification Service
-cd NotificationService && npm run dev
-```
-
-Services will be available at:
-- HotelService → `http://localhost:3001`
-- BookingService → `http://localhost:3002`
-- NotificationService → `http://localhost:3003`
+> Use your actual deployment-specific values in production. Do not commit secrets to Git.
 
 ---
 
+## 📦 Install Dependencies
 
-**Typical usage flow:**
-1. `POST /hotels` — Register a new hotel listing.
-2. `GET /hotels?city=Mumbai` — Query available hotels by city.
-3. `POST /bookings` — Reserve a room; triggers async email notification.
-4. `DELETE /bookings/:id` — Cancel a reservation and release the room.
+```bash
+cd HotelService
+npm install
+
+cd ../BookingService
+npm install
+
+cd ../NotificationService
+npm install
+```
+
+For AuthInGo:
+
+```bash
+cd AuthInGo
+go mod download
+```
+
+---
+
+## ▶️ Run Locally
+
+### AuthInGo
+
+```bash
+cd AuthInGo
+go run .
+```
+
+### HotelService
+
+```bash
+cd HotelService
+npm run dev
+```
+
+### BookingService
+
+```bash
+cd BookingService
+npm run dev
+```
+
+### NotificationService
+
+```bash
+cd NotificationService
+npm run dev
+```
+
+> Local ports are controlled by each service's environment/configuration. Do not assume production Render ports are the same as local ports.
+
+---
+
+## 🐳 Docker Compose
+
+From the repository root:
+
+```bash
+docker compose up --build
+```
+
+To stop the stack:
+
+```bash
+docker compose down
+```
 
 ---
 
 ## 📡 API Reference
 
-Full endpoint reference — request bodies, response schemas, query parameters, 
-error codes, and data models — is documented in:
+The complete endpoint reference is maintained in:
 
 **[→ API_DOCUMENTATION.md](./API_DOCUMENTATION.md)**
 
-Quick summary:
-- **HotelService** — 14 endpoints covering hotel CRUD, room availability, 
-  room generation jobs, and the availability scheduler
-- **BookingService** — 2 endpoints implementing a two-phase booking flow 
-  with distributed locking
-- **NotificationService** — background worker only, no public HTTP endpoints
+### AuthInGo
+
+Authentication and gateway endpoints include:
+
+```text
+GET    /ping
+POST   /signup
+POST   /login
+GET    /profile
+GET    /all
+DELETE /
+```
+
+Role management includes:
+
+```text
+GET    /roles/{id}
+GET    /roles
+POST   /createRole
+PATCH  /roles/{id}
+GET    /roleByName
+GET    /role/{id}/permissions
+POST   /assignpermissionToRole
+DELETE  /removePermissionFromRole
+POST   /roles/{userId}/assign/{roleId}
+DELETE /roles/{id}
+```
+
+Protected routes require:
+
+```http
+Authorization: Bearer <JWT_TOKEN>
+```
+
+### HotelService
+
+Main API areas:
+
+```text
+GET    /api/v1/ping
+
+POST   /api/v1/hotels
+GET    /api/v1/hotels/getAllHotels
+GET    /api/v1/hotels/:id
+PATCH  /api/v1/hotels/:id
+DELETE /api/v1/hotels/:id
+
+GET    /api/v1/rooms/getAvailableRooms
+POST   /api/v1/rooms/update-rooms-id
+
+POST   /api/v1/generateRooms
+POST   /api/v1/hotels/generateRooms
+
+POST   /api/v1/scheduler/start
+POST   /api/v1/scheduler/stop
+GET    /api/v1/scheduler/status
+POST   /api/v1/scheduler/extend
+```
+
+### BookingService
+
+```text
+GET    /api/v1/ping
+
+POST   /api/v1/booking
+POST   /api/v1/booking/confirm/:idempotencyKey
+GET    /api/v1/booking/getAllBookings/:id
+```
+
+### NotificationService
+
+NotificationService primarily operates as an asynchronous mail worker. It does not expose a conventional public notification API for application workflows.
 
 ---
 
-## 🧠 Lessons Learned / Technical Challenges
+## 🔐 Authentication
 
-### Challenge 1: Preventing Double-Booking Under Concurrent Requests
+AuthInGo uses JWT-based authentication.
 
-**The Problem:** When two users simultaneously attempted to book the last available room, both requests would read "1 room available," pass the validation check, and both get confirmed — resulting in an over-committed booking.
+Example:
 
-**The Solution:** A **Redlock distributed lock** (via Redis) is acquired on 
-`hotel:<hotelId>` before the availability check runs. This ensures only one 
-booking request can proceed at a time per hotel, eliminating the race condition. 
-The lock is scoped to a configurable TTL (`LOCK_TTL` env var, default 5000ms).
+```http
+Authorization: Bearer <JWT_TOKEN>
+```
 
----
+Successful authentication returns user information together with a JWT token.
 
-### Challenge 2: Decoupling Notification Delivery from Booking Latency
+Example response shape:
 
-**The Problem:** Sending confirmation emails synchronously during the booking flow introduced ~800ms of latency per request (SMTP round-trip), degrading user experience and coupling the booking transaction's success to email provider uptime.
-
-**The Solution:** Email delivery was extracted entirely into `NotificationService` and placed behind a **Bull Queue**. The `BookingService` simply enqueues a lightweight job payload (booking ID, user email, template key) and returns the HTTP response immediately. `NotificationService` processes jobs asynchronously with retry logic, backoff, and dead-letter handling — so a temporary SMTP failure never surfaces to the end user.
-
----
-
-### Challenge 3: Maintaining Type Safety Across Service Boundaries
-
-**The Problem:** With three separate Node.js services, shared data contracts (DTOs, enums, error shapes) were initially duplicated in each codebase — creating silent drift when one service changed a field name.
-
-**The Solution:** Shared types were extracted into a common types package and imported by each service. Combined with **TypeScript strict mode**, any contract mismatch surfaces at compile time rather than in production.
+```json
+{
+  "status": "success",
+  "message": "Login successful",
+  "data": {
+    "user": {},
+    "jwtToken": "..."
+  }
+}
+```
 
 ---
 
-## 📄 License & Contact
+## 🏨 Hotel & Room Management
+
+HotelService handles:
+
+- Hotel creation
+- Hotel listing
+- Hotel lookup by ID
+- Hotel updates
+- Hotel deletion
+- Room availability
+- Updating room IDs after booking operations
+- Bulk room generation
+- Availability scheduler operations
+
+### Room Availability Query
+
+```text
+GET /api/v1/rooms/getAvailableRooms
+```
+
+Query parameters:
+
+```text
+roomCategoryId
+checkInDate
+checkOutDate
+```
+
+### Room Generation
+
+```text
+POST /api/v1/generateRooms
+```
+
+Request fields include:
+
+```json
+{
+  "roomCategoryId": 1,
+  "startDate": "2026-01-01",
+  "endDate": "2026-01-10",
+  "priceOverride": 2500,
+  "batchSize": 100
+}
+```
+
+---
+
+## 🧾 Booking Workflow
+
+BookingService uses a two-step flow:
+
+### 1. Create Booking
+
+```http
+POST /api/v1/booking
+```
+
+Required fields include:
+
+```json
+{
+  "userId": 1,
+  "hotelId": 1,
+  "totalGuests": 2,
+  "bookingAmount": 5000,
+  "checkInDate": "2026-01-10",
+  "checkOutDate": "2026-01-12",
+  "roomCategoryId": 1
+}
+```
+
+The response contains a booking ID and idempotency key.
+
+### 2. Confirm Booking
+
+```http
+POST /api/v1/booking/confirm/:idempotencyKey
+```
+
+The confirmation step performs the protected booking operation and returns the booking status.
+
+### 3. Fetch User Bookings
+
+```http
+GET /api/v1/booking/getAllBookings/:id
+```
+
+---
+
+## 🔒 Preventing Double Booking
+
+BookingService uses **Redis + Redlock** to coordinate concurrent booking requests.
+
+The lock is acquired before the critical availability/booking operation so concurrent requests do not independently reserve the same inventory.
+
+The lock duration is configurable using:
+
+```env
+LOCK_TTL=5000
+```
+
+---
+
+## 📬 Notification Processing
+
+NotificationService handles asynchronous email processing using Redis/BullMQ and Nodemailer.
+
+The notification worker is separated from the booking HTTP request so email processing does not need to be performed directly inside the main booking request.
+
+---
+
+## 🧠 Important Backend Design Patterns
+
+### API Gateway
+
+AuthInGo provides a single public entry point and proxies requests to internal services.
+
+### JWT Authentication
+
+Authentication is centralized in the Go gateway and protected routes use JWT claims.
+
+### Role-Based Access Control
+
+Administrative routes use role-based middleware to restrict access.
+
+### Rate Limiting
+
+Login requests use rate limiting to reduce repeated authentication attempts.
+
+### Distributed Locking
+
+Redlock prevents conflicting concurrent booking operations.
+
+### Background Jobs
+
+Redis/BullMQ is used for asynchronous work such as room generation and notification processing.
+
+### Service Separation
+
+Each service owns a focused business responsibility and can be developed/deployed independently.
+
+---
+
+## 🧪 Health Checks
+
+Services expose ping/health-style endpoints.
+
+Examples:
+
+```http
+GET /ping
+GET /api/v1/ping
+```
+
+Use these endpoints to verify that the gateway or individual service is responding.
+
+---
+
+## 📝 API Documentation Notes
+
+The API reference is generated from the **current backend implementation**, so route names and payloads should be treated as the source of truth.
+
+For complete request/response schemas and endpoint details, see:
+
+**[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)**
+
+---
+
+## 📄 License
 
 This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
 ---
 
+## 👨‍💻 Author
+
 **Akash Verma**
 
-
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/akash-verma-0675b2225/)
-[![GitHub](https://img.shields.io/badge/GitHub-Follow-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Akash-Verma96)
 
+[![GitHub](https://img.shields.io/badge/GitHub-Follow-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Akash-Verma96)
 
 ---
 
